@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logotrabalho.png" width="350">
+  <img src="imagens/logotrabalho.png" width="350">
 </p>
 
 ## Equipe
@@ -50,7 +50,7 @@ A ResolveLar será estruturada utilizando uma arquitetura baseada em
 microsserviços, com API Gateway, clientes distintos para contratantes
 e prestadores e bancos de dados independentes por serviço.
 
-➡️ [Visualizar o esboço da arquitetura](docs/arquitetura.md)
+➡️ [Visualizar o esboço da arquitetura](arquitetura.md)
 
 ## 6. Instruções de Execução
 
