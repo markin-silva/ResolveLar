@@ -45,6 +45,14 @@ A ResolveLar não será apenas um catálogo de profissionais, acompanhando todo 
 5. Após o cliente aceitar uma proposta, a plataforma confirma a disponibilidade do profissional, cria o agendamento e realiza a autorização do pagamento.
 6. Ao finalizar a execução do serviço, o cliente confirma a conclusão, o pagamento é processado e ambos podem avaliar a experiência.
 
-## 5. Instruções de Execução
+## 5. Esboço da Arquitetura
+
+A ResolveLar será estruturada utilizando uma arquitetura baseada em
+microsserviços, com API Gateway, clientes distintos para contratantes
+e prestadores e bancos de dados independentes por serviço.
+
+➡️ [Visualizar o esboço da arquitetura](docs/arquitetura.md)
+
+## 6. Instruções de Execução
 
 Em progresso - As instruções completas para levantar a arquitetura de microsserviços via Docker-Compose e Kubernetes local serão atualizadas nas próximas entregas.
