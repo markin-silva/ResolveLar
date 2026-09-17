@@ -11,7 +11,7 @@
 ## 1. Visão Geral da Startup
 
 <p>
-  <img src="imagens/2x.png" width="300" align="left">
+  <img src="imagens/2xx.png" width="300" align="left">
 
   A ResolveLar é uma plataforma digital que conecta pessoas que precisam de serviços de manutenção residencial a profissionais disponíveis para realizá-los. O aplicativo reúne diferentes tipos de serviço em um único ambiente, permitindo que o cliente encontre profissionais, solicite atendimento, receba orçamentos, escolha um prestador, agende o serviço e avalie o atendimento.
 </p>
