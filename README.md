@@ -6,7 +6,7 @@
 * Marcus Vinícius Alves Silva
 * Maria Clara Miguel Silva
 * João Paulo Souza Selvati
-* [Nome do Aluno 4]
+* Luiza Oliveira de Souza Garcia
 
 ## 1. Visão Geral da Startup
 A ResolveLar é uma plataforma digital que conecta pessoas que precisam de serviços de manutenção residencial a profissionais disponíveis para realizá-los. O aplicativo reúne diferentes tipos de serviço em um único ambiente, permitindo que o cliente encontre profissionais, solicite atendimento, receba orçamentos, escolha um prestador, agende o serviço, realize o pagamento e avalie o atendimento.
@@ -32,3 +32,19 @@ A proposta atua principalmente em dois aspectos de impacto. O primeiro é a gera
 
 *Como o impacto será medido (Indicadores):*
 O impacto poderá ser acompanhado por indicadores como quantidade de profissionais ativos, quantidade de serviços concluídos e renda movimentada para prestadores. Também serão avaliados o tempo médio entre solicitação e contratação, o percentual de solicitações atendidas e a avaliação média dos serviços.
+
+## 4. Esboço da Solução
+
+A ResolveLar não será apenas um catálogo de profissionais, acompanhando todo o ciclo da contratação.
+
+*Jornada de Uso:*
+1. O cliente informa o problema ou serviço necessário, sua localização e uma preferência de data.
+2. A plataforma identifica a categoria do serviço e apresenta profissionais compatíveis que atendem naquela região.
+3. O cliente pode consultar informações e solicitar um orçamento.
+4. O prestador recebe a solicitação, analisa o serviço e envia sua proposta.
+5. Após o cliente aceitar uma proposta, a plataforma confirma a disponibilidade do profissional, cria o agendamento e realiza a autorização do pagamento.
+6. Ao finalizar a execução do serviço, o cliente confirma a conclusão, o pagamento é processado e ambos podem avaliar a experiência.
+
+## 5. Instruções de Execução
+
+Em progresso - As instruções completas para levantar a arquitetura de microsserviços via Docker-Compose e Kubernetes local serão atualizadas nas próximas entregas.
