@@ -1,9 +1,6 @@
 <p align="center">
-  <img src="images/logotrabalho.png" width="250">
-</p># ResolveLar
-# ResolveLar
-
-**Slogan:** Quem precisa encontra. Quem sabe fazer, trabalha.
+  <img src="logotrabalho.png" width="350">
+</p>
 
 ## Equipe
 * Marcus Vinícius Alves Silva
