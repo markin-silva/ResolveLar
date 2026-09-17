@@ -66,15 +66,24 @@
 
 ## 4. Esboço da Solução
 
+<p>
 A ResolveLar não será apenas um catálogo de profissionais, acompanhando todo o ciclo da contratação.
+</p>
 
-*Jornada de Uso:*
-1. O cliente descreve o problema, informa a localização, a categoria do serviço (a partir de uma lista) e uma preferência de data.
-2. A plataforma apresenta os profissionais compatíveis com aquela categoria que atendem a região informada.
-3. O cliente consulta o perfil dos profissionais (avaliações, serviços realizados) e solicita orçamento a um ou mais prestadores.
-4. Cada prestador que recebe a solicitação analisa o serviço e envia sua proposta, com valor e prazo estimados.
-5. O cliente escolhe uma das propostas recebidas; a plataforma verifica a disponibilidade do profissional e confirma o agendamento.
-6. Ao concluir o serviço, o prestador confirma a finalização da execução; em seguida, o cliente confirma o recebimento, e ambos podem avaliar a experiência.
+<p><strong>Jornada de Uso:</strong></p>
+
+<ol>
+  <li>O cliente descreve o problema, informa a localização, a categoria do serviço (a partir de uma lista) e uma preferência de data.</li>
+  <li>A plataforma apresenta os profissionais compatíveis com aquela categoria que atendem a região informada.</li>
+  <li>O cliente consulta o perfil dos profissionais (avaliações, serviços realizados) e solicita orçamento a um ou mais prestadores.</li>
+  <li>Cada prestador que recebe a solicitação analisa o serviço e envia sua proposta, com valor e prazo estimados.</li>
+  <li>O cliente escolhe uma das propostas recebidas; a plataforma verifica a disponibilidade do profissional e confirma o agendamento.</li>
+  <li>Ao concluir o serviço, o prestador confirma a finalização da execução; em seguida, o cliente confirma o recebimento, e ambos podem avaliar a experiência.</li>
+</ol>
+
+<p align="center">
+  <img src="imagens/7..png" width="1000">
+</p>
 
 ## 5. Esboço da Arquitetura
 
