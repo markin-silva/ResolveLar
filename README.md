@@ -4,7 +4,7 @@
 
 ## Equipe
 * Marcus Vinícius Alves Silva
-* [Nome do Aluno 2]
+* Maria Clara Miguel Silva
 * João Paulo Souza Selvati
 * [Nome do Aluno 4]
 
