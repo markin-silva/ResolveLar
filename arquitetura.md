@@ -4,7 +4,9 @@ A ResolveLar será estruturada como um sistema distribuído baseado em microsser
 
 ## Visão Geral
 
-Em desenvolvimento 
+<p align="center">
+  <img src="imagens/arquitetura.png" width="350">
+</p>
 
 ## Componentes
 
