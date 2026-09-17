@@ -1,4 +1,6 @@
-# ResolveLar
+<p align="center">
+  <img src="images/logotrabalho.png" width="250">
+</p># ResolveLar
 
 **Slogan:** Quem precisa encontra. Quem sabe fazer, trabalha.
 
