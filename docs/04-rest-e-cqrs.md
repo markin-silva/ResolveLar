@@ -29,7 +29,7 @@ Documento de arquitetura da API do ResolveLar, plataforma que conecta clientes a
 | Solicitações | `GET` | `/v1/solicitacoes?status=aberta` | Lista pedidos do usuário | `200 OK` | `401` |
 | Orçamentos | `POST` | `/v1/solicitacoes/{id}/orcamentos` | Prestador envia orçamento | `201 Created` | `403`, `404`, `409` |
 | Orçamentos | `GET` | `/v1/orcamentos/{id}` | Consulta orçamento | `200 OK` | `404` |
-| Orçamentos | `POST` | `/v1/orcamentos/{id}/aprovacao` | Cliente aprova | `200 OK` | `403`, `404`, `409` |
+| Orçamentos | `POST` | `/v1/orcamentos/{id}/aprovacao` | Cliente aprova | `202 Accepted` | `403`, `404`, `409` |
 | Orçamentos | `POST` | `/v1/orcamentos/{id}/recusa` | Cliente recusa | `200 OK` | `403`, `404`, `409` |
 | Avaliações | `POST` | `/v1/solicitacoes/{id}/avaliacao` | Cliente avalia o serviço concluído | `201 Created` | `403`, `409`, `422` |
 
