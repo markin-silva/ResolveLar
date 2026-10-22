@@ -152,7 +152,7 @@ sequenceDiagram
 
     Cliente->>BFF: GET /v1/solicitacoes/{id}
     BFF->>SOL: Consultar estado
-    SOL-->>BFF: Falha no pagamento; SAGA COMPENSADA
+    SOL-->>BFF: Falha no pagamento - SAGA COMPENSADA
     BFF-->>Cliente: Informar falha e permitir nova tentativa
 ```
 
