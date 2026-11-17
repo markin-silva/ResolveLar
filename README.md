@@ -91,11 +91,135 @@ A ResolveLar será estruturada utilizando uma arquitetura baseada em
 microsserviços, com API Gateway, clientes distintos para contratantes
 e prestadores e bancos de dados independentes por serviço.
 
-➡️ [Visualizar o esboço da arquitetura](arquitetura.md)
+➡️ Documentação de arquitetura em [`docs/`](docs/):
+- [01 — Decomposição em microsserviços e banco de dados](docs/01-decomposicao-e-dados.md)
+- [02 — Gateway e BFF](docs/02-gateway-e-bff.md)
+- [03 — SAGA orquestrada (aceite de orçamento)](docs/03-saga-orquestrada.md)
+- [04 — REST, HATEOAS e CQRS](docs/04-rest-e-cqrs.md)
 
-## 6. Instruções de Execução
+## 6. Como o projeto funciona
 
-Em progresso — As instruções completas para levantar a arquitetura de microsserviços via Docker-Compose e Kubernetes local serão atualizadas nas próximas entregas.
+```
+Navegador ──► Kong :8000 ──► BFF (contratante ou prestador) ──► microsserviços ──► PostgreSQL (um por serviço)
+                 │                                                     │
+              Redis                                     RabbitMQ (eventos)
+           (rate limit)
+```
+
+- **Kong** (API Gateway) é a única porta de entrada. Remove o prefixo `/v1/contratante` ou `/v1/prestador`, gera o `X-Correlation-Id` e aplica CORS e rate limit.
+- **BFFs** (`bff-contratante`, `bff-prestador`) montam a resposta de cada tela. Não têm banco próprio.
+- **Microsserviços** são donos dos dados: `ms-prestadores`, `ms-solicitacoes` (orquestrador da SAGA), `ms-agendamentos`, `ms-pagamentos` e `ms-avaliacoes`.
+- **Aceite de orçamento (SAGA):** `POST /v1/orcamentos/{id}/aprovacao` responde `202`. O `ms-solicitacoes` reserva o horário no `ms-agendamentos` e cobra no `ms-pagamentos`. Se o pagamento for recusado, a reserva é liberada (compensação). O resultado chega por evento no RabbitMQ.
+- **CQRS:** o `ms-prestadores` grava no banco de escrita e um projetor atualiza o banco de leitura desnormalizado, usado nas buscas.
+
+Detalhes e contratos: [`.ai-memory/ARCHITECTURE.md`](.ai-memory/ARCHITECTURE.md).
+
+### Estado atual
+
+| Parte | Situação |
+|---|---|
+| Infraestrutura (Kong, Redis, RabbitMQ, 6× PostgreSQL) | Pronta, sobe com `docker compose up` |
+| Template de microsserviço (`services/_template-fastapi`) | Pronto: `/health` e erros em RFC 7807 |
+| BFFs e microsserviços de domínio | **Não implementados ainda.** `/v1/contratante/...` responde `503` |
+| Autenticação (JWT) e rate limit por rota | Pendentes (ver `.ai-memory/DECISIONS_LOG.md`) |
+| Frontends (React/Vite) | Pendentes |
+
+Acompanhe o andamento em [`.ai-memory/PROJECT_STATE.md`](.ai-memory/PROJECT_STATE.md).
+
+## 7. Como rodar
+
+### Pré-requisitos
+- Docker e Docker Compose v2 (`docker compose version`)
+- `curl` (para os testes abaixo)
+
+### Primeira vez
+
+```bash
+git clone <url-do-repositorio> ResolveLar
+cd ResolveLar
+cp .env.example .env     # cria o arquivo de configuração local
+docker compose up -d
+docker compose ps        # todos devem aparecer "healthy"
+```
+
+O `.env` é o arquivo com as senhas locais. Ele **não vai para o Git** (está no `.gitignore`). Os valores de `.env.example` são placeholders: troque as senhas se for usar o projeto fora da sala de aula.
+
+### Testar que está funcionando
+
+```bash
+# Gateway
+curl -i http://localhost:8000/nada                    # 404 em application/problem+json
+curl -i http://localhost:8000/v1/contratante/teste    # 503 até o BFF existir
+curl -s http://127.0.0.1:8001/status                  # admin do Kong (200)
+
+# Infraestrutura
+docker compose exec redis redis-cli ping                       # PONG
+docker compose exec rabbitmq rabbitmq-diagnostics -q ping      # Ping succeeded
+docker compose exec db-agendamentos pg_isready -U resolvelar -d agendamentos
+```
+
+> **Painel do RabbitMQ:** a porta 15672 **não está publicada** no host, então `http://localhost:15672` não abre. Para usá-lo, adicione `"127.0.0.1:15672:15672"` à seção `ports` do serviço `rabbitmq` no `docker-compose.yml`. Enquanto isso, use os comandos `docker compose exec rabbitmq ...`.
+
+### Testar um microsserviço (template)
+
+Todo serviço novo começa a partir de `services/_template-fastapi`:
+
+```bash
+cd services/_template-fastapi
+docker build -t resolvelar/template-fastapi:test .
+docker run -d --name tpl -p 127.0.0.1:8100:8000 resolvelar/template-fastapi:test
+curl -s http://127.0.0.1:8100/health      # {"status":"ok",...}
+docker rm -f tpl
+```
+
+### Parar
+
+```bash
+docker compose down       # para e mantém os dados dos bancos
+docker compose down -v    # para e APAGA os dados (zera os bancos)
+```
+
+### Problemas comuns
+
+| Sintoma | Causa provável | O que fazer |
+|---|---|---|
+| `port is already allocated` na 8000 | Outro programa usa a porta 8000 | Pare o outro programa ou mude a porta em `docker-compose.yml` |
+| Contêiner `unhealthy` | Banco ou broker ainda iniciando | Aguarde 30s e rode `docker compose ps` de novo; se persistir, `docker compose logs <servico>` |
+| `DATABASE_URL não configurada` | Serviço sem variável de ambiente | Confira o `.env` e o bloco `environment` do serviço no compose |
+| Mudou a senha no `.env` e o banco não aceita | Volume já criado com a senha antiga | `docker compose down -v` (apaga os dados) e suba de novo |
+
+### Kubernetes (Parte 3)
+
+Os manifestos estão em [`k8s/`](k8s/) (namespace, ConfigMap, Secret de exemplo, RabbitMQ, Redis e Ingress). Ainda não foram testados em um cluster; a ordem de aplicação é:
+
+```bash
+kubectl apply -f k8s/00-namespace.yaml
+kubectl apply -f k8s/01-configmap.yaml -f k8s/02-secret.yaml
+kubectl apply -f k8s/03-infra.yaml -f k8s/04-ingress.yaml
+```
+
+O `02-secret.yaml` contém valores de exemplo. Em um ambiente real, crie os segredos fora do Git.
+
+## 8. Estrutura do repositório
+
+| Caminho | Conteúdo |
+|---|---|
+| `docker-compose.yml` | Infraestrutura local (Kong, Redis, RabbitMQ, bancos) |
+| `.env.example` | Variáveis de ambiente (copiar para `.env`) |
+| `gateway/kong.yml` | Rotas e plugins do Kong (modo declarativo) |
+| `services/_template-fastapi/` | Base para todos os serviços Python |
+| `k8s/` | Manifestos Kubernetes |
+| `docs/` | Documentação de arquitetura (seções 1 a 4) |
+| `.ai-memory/` | Memória compartilhada do projeto: arquitetura, estado, decisões |
+| `.github/copilot-instructions.md`, `.cursorrules` | Instruções para agentes de IA no VS Code |
+
+## 9. Como contribuir
+
+1. Antes de codar, leia `.ai-memory/ARCHITECTURE.md`, `PROJECT_STATE.md` e `DECISIONS_LOG.md`.
+2. Nomes de hosts, portas, filas e rotas devem seguir o `ARCHITECTURE.md`. Mudança de contrato, endpoint, evento ou variável de ambiente vai para o `DECISIONS_LOG.md`.
+3. Nunca commite credenciais. Use variáveis de ambiente (`.env` local, ConfigMap/Secret no Kubernetes).
+4. Ao concluir uma tarefa, atualize o `PROJECT_STATE.md`.
+5. Commits no padrão [Conventional Commits](https://www.conventionalcommits.org/), em inglês (ex.: `feat(pagamentos): implement transactional outbox relay`).
 
 ## Referências
 
