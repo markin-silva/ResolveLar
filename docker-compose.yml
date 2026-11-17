@@ -1,0 +1,135 @@
+name: resolvelar
+
+x-postgres: &postgres
+  image: postgres:16-alpine
+  restart: unless-stopped
+  networks: [internal_net]
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+    interval: 10s
+    timeout: 3s
+    retries: 5
+
+services:
+  # ---------- Gateway ----------
+  kong:
+    image: kong:3.6
+    restart: unless-stopped
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/kong.yml
+      KONG_PROXY_LISTEN: 0.0.0.0:8000
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+    volumes:
+      - ./gateway/kong.yml:/kong/kong.yml:ro
+    ports:
+      - "8000:8000"
+      - "127.0.0.1:8001:8001"
+    networks: [edge_net, internal_net]
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ---------- Infra ----------
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks: [internal_net]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks: [internal_net]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ---------- Bancos (database per service) ----------
+  db-prestadores-write:
+    <<: *postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_PRESTADORES_WRITE}
+      POSTGRES_DB: prestadores_write
+    volumes:
+      - pg_prestadores_write:/var/lib/postgresql/data
+
+  db-prestadores-read:
+    <<: *postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_PRESTADORES_READ}
+      POSTGRES_DB: prestadores_read
+    volumes:
+      - pg_prestadores_read:/var/lib/postgresql/data
+
+  db-solicitacoes:
+    <<: *postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_SOLICITACOES}
+      POSTGRES_DB: solicitacoes
+    volumes:
+      - pg_solicitacoes:/var/lib/postgresql/data
+
+  db-agendamentos:
+    <<: *postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_AGENDAMENTOS}
+      POSTGRES_DB: agendamentos
+    volumes:
+      - pg_agendamentos:/var/lib/postgresql/data
+
+  db-pagamentos:
+    <<: *postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_PAGAMENTOS}
+      POSTGRES_DB: pagamentos
+    volumes:
+      - pg_pagamentos:/var/lib/postgresql/data
+
+  db-avaliacoes:
+    <<: *postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_AVALIACOES}
+      POSTGRES_DB: avaliacoes
+    volumes:
+      - pg_avaliacoes:/var/lib/postgresql/data
+
+  # Serviços de aplicação (BFFs, ms-*, web-*) serão adicionados nas próximas tarefas
+  # a partir de services/_template-fastapi/.
+
+networks:
+  edge_net:
+    driver: bridge
+  internal_net:
+    driver: bridge
+    internal: true
+
+volumes:
+  pg_prestadores_write:
+  pg_prestadores_read:
+  pg_solicitacoes:
+  pg_agendamentos:
+  pg_pagamentos:
+  pg_avaliacoes:
+  rabbitmq_data:

@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: resolvelar-config
+  namespace: resolvelar
+data:
+  RABBITMQ_HOST: rabbitmq
+  REDIS_URL: redis://redis:6379/0
+  MS_PRESTADORES_URL: http://ms-prestadores:8000
+  MS_SOLICITACOES_URL: http://ms-solicitacoes:8000
+  MS_AGENDAMENTOS_URL: http://ms-agendamentos:8000
+  MS_PAGAMENTOS_URL: http://ms-pagamentos:8000
+  MS_AVALIACOES_URL: http://ms-avaliacoes:8000
+  HTTP_TIMEOUT_SECONDS: "3"
+  DB_PRESTADORES_WRITE_HOST: db-prestadores-write
+  DB_PRESTADORES_READ_HOST: db-prestadores-read
+  DB_SOLICITACOES_HOST: db-solicitacoes
+  DB_AGENDAMENTOS_HOST: db-agendamentos
+  DB_PAGAMENTOS_HOST: db-pagamentos
+  DB_AVALIACOES_HOST: db-avaliacoes

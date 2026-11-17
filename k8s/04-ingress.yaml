@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: resolvelar-ingress
+  namespace: resolvelar
+  annotations:
+    # Espelha strip_path: true do Kong (ingress-nginx): /v1/contratante/foo -> /foo
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /v1/contratante(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: bff-contratante
+                port: {number: 8000}
+          - path: /v1/prestador(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: bff-prestador
+                port: {number: 8000}

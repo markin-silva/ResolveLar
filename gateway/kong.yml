@@ -1,0 +1,52 @@
+_format_version: "3.0"
+_transform: true
+
+services:
+  - name: bff-contratante
+    url: http://bff-contratante:8000
+    connect_timeout: 3000
+    read_timeout: 10000
+    write_timeout: 10000
+    routes:
+      - name: route-contratante
+        paths:
+          - /v1/contratante
+        strip_path: true
+
+  - name: bff-prestador
+    url: http://bff-prestador:8000
+    connect_timeout: 3000
+    read_timeout: 10000
+    write_timeout: 10000
+    routes:
+      - name: route-prestador
+        paths:
+          - /v1/prestador
+        strip_path: true
+
+plugins:
+  - name: correlation-id
+    config:
+      header_name: X-Correlation-Id
+      generator: uuid
+      echo_downstream: true
+
+  - name: cors
+    config:
+      origins:
+        - http://localhost:3001
+        - http://localhost:3002
+      methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+      headers: [Accept, Authorization, Content-Type, X-Correlation-Id]
+      exposed_headers: [X-Correlation-Id]
+      credentials: true
+      max_age: 3600
+
+  - name: rate-limiting
+    config:
+      minute: 120
+      policy: redis
+      redis_host: redis
+      redis_port: 6379
+      redis_timeout: 2000
+      fault_tolerant: true
