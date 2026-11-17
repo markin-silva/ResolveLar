@@ -119,9 +119,10 @@ Detalhes e contratos: [`.ai-memory/ARCHITECTURE.md`](.ai-memory/ARCHITECTURE.md)
 | Parte | Situação |
 |---|---|
 | Infraestrutura (Kong, Redis, RabbitMQ, 6× PostgreSQL) | Pronta, sobe com `docker compose up` |
-| Template de microsserviço (`services/_template-fastapi`) | Pronto: `/health` e erros em RFC 7807 |
-| BFFs e microsserviços de domínio | **Não implementados ainda.** `/v1/contratante/...` responde `503` |
-| Autenticação (JWT) e rate limit por rota | Pendentes (ver `.ai-memory/DECISIONS_LOG.md`) |
+| Kong: JWT + ACL por perfil, rate limit por rota, CORS, correlation-id | Pronto (usuários de teste, ver abaixo) |
+| `bff-contratante` e `bff-prestador` | Prontos. Enquanto os `ms-*` não existem, respondem com **dados de exemplo** (`ENABLE_UPSTREAM_MOCK=true`) |
+| Microsserviços de domínio (`ms-*`) | **Não implementados ainda** |
+| Kubernetes (Kong + BFFs + infra, demo de escalabilidade) | Manifestos em [`k8s/`](k8s/); validados com `kubeconform`, **ainda não aplicados em cluster real** |
 | Frontends (React/Vite) | Pendentes |
 
 Acompanhe o andamento em [`.ai-memory/PROJECT_STATE.md`](.ai-memory/PROJECT_STATE.md).
@@ -146,11 +147,21 @@ O `.env` é o arquivo com as senhas locais. Ele **não vai para o Git** (está n
 
 ### Testar que está funcionando
 
+O gateway exige JWT. Gere tokens de teste (usuários `contratante_15` e `prest_17`):
+
+```bash
+eval "$(python3 scripts/generate_jwt.py | grep export)"    # cria $TOKEN_CONTRATANTE e $TOKEN_PRESTADOR
+```
+
 ```bash
 # Gateway
-curl -i http://localhost:8000/nada                    # 404 em application/problem+json
-curl -i http://localhost:8000/v1/contratante/teste    # 503 até o BFF existir
-curl -s http://127.0.0.1:8001/status                  # admin do Kong (200)
+curl -i http://localhost:8000/nada                                                   # 404
+curl -i http://localhost:8000/v1/contratante/prestadores                             # 401 (sem token)
+curl -s -H "Authorization: Bearer $TOKEN_CONTRATANTE" http://localhost:8000/v1/contratante/prestadores          # 200
+curl -si -H "Authorization: Bearer $TOKEN_CONTRATANTE" http://localhost:8000/v1/prestador/tarefas/sol_8f21 | head -1   # 403 (perfil errado)
+curl -s -H "Authorization: Bearer $TOKEN_PRESTADOR" http://localhost:8000/v1/prestador/tarefas/sol_8f21               # 200 (técnico + financeiro)
+curl -s -H "Authorization: Bearer $TOKEN_CONTRATANTE" http://localhost:8000/v1/contratante/solicitacoes/sol_8f21/orcamentos   # comparação de orçamentos
+curl -s http://127.0.0.1:8001/status                                                 # admin do Kong (200)
 
 # Infraestrutura
 docker compose exec redis redis-cli ping                       # PONG
@@ -159,6 +170,10 @@ docker compose exec db-agendamentos pg_isready -U resolvelar -d agendamentos
 ```
 
 > **Painel do RabbitMQ:** a porta 15672 **não está publicada** no host, então `http://localhost:15672` não abre. Para usá-lo, adicione `"127.0.0.1:15672:15672"` à seção `ports` do serviço `rabbitmq` no `docker-compose.yml`. Enquanto isso, use os comandos `docker compose exec rabbitmq ...`.
+
+### Dados de exemplo (mock) nos BFFs
+
+Com `ENABLE_UPSTREAM_MOCK=true` (padrão), se um microsserviço não estiver no ar o BFF devolve payloads de exemplo da `docs/02` e marca a resposta com `X-Mock-Upstream: true`. Um serviço que **responde** nunca é mockado, então cada integrante pode subir o seu `ms-*` (com o hostname de `.ai-memory/ARCHITECTURE.md`, na `internal_net`) e o BFF passa a usá-lo sozinho. Rotas esperadas: `.ai-memory/DECISIONS_LOG.md`, item 20. Com `false`, falhas viram `503` (dado essencial) ou o bloco é omitido (dado opcional).
 
 ### Testar um microsserviço (template)
 
@@ -186,19 +201,23 @@ docker compose down -v    # para e APAGA os dados (zera os bancos)
 | `port is already allocated` na 8000 | Outro programa usa a porta 8000 | Pare o outro programa ou mude a porta em `docker-compose.yml` |
 | Contêiner `unhealthy` | Banco ou broker ainda iniciando | Aguarde 30s e rode `docker compose ps` de novo; se persistir, `docker compose logs <servico>` |
 | `DATABASE_URL não configurada` | Serviço sem variável de ambiente | Confira o `.env` e o bloco `environment` do serviço no compose |
+| `401` mesmo com token | Token expirado (24h) ou segredo diferente | Gere outro: `python3 scripts/generate_jwt.py` |
+| `429` ao testar | Rate limit (10/h criar solicitação, 30/h criar orçamento) | Zere os contadores: `docker compose exec redis redis-cli FLUSHALL` |
+| Editou o `gateway/kong.yml` e nada mudou | O Kong só lê o arquivo ao iniciar | `docker compose restart kong` (e `./scripts/sync-kong-configmap.sh` para o k8s) |
 | Mudou a senha no `.env` e o banco não aceita | Volume já criado com a senha antiga | `docker compose down -v` (apaga os dados) e suba de novo |
 
 ### Kubernetes (Parte 3)
 
-Os manifestos estão em [`k8s/`](k8s/) (namespace, ConfigMap, Secret de exemplo, RabbitMQ, Redis e Ingress). Ainda não foram testados em um cluster; a ordem de aplicação é:
+Guia completo (kind/Minikube, carregar imagens, validar e **demonstração de escalabilidade** com `kubectl scale` + header `X-Pod-Name`): [`k8s/README.md`](k8s/README.md). Resumo:
 
 ```bash
-kubectl apply -f k8s/00-namespace.yaml
-kubectl apply -f k8s/01-configmap.yaml -f k8s/02-secret.yaml
-kubectl apply -f k8s/03-infra.yaml -f k8s/04-ingress.yaml
+docker build -t resolvelar/bff-contratante:latest services/bff-contratante
+docker build -t resolvelar/bff-prestador:latest   services/bff-prestador
+# carregue as imagens no cluster (ver k8s/README.md) e então:
+kubectl apply -f k8s/
 ```
 
-O `02-secret.yaml` contém valores de exemplo. Em um ambiente real, crie os segredos fora do Git.
+Os manifestos passam no `kubeconform`, mas ainda não foram aplicados em cluster real. O `02-secret.yaml` contém valores de exemplo; em ambiente real, crie os segredos fora do Git.
 
 ## 8. Estrutura do repositório
 
@@ -206,9 +225,11 @@ O `02-secret.yaml` contém valores de exemplo. Em um ambiente real, crie os segr
 |---|---|
 | `docker-compose.yml` | Infraestrutura local (Kong, Redis, RabbitMQ, bancos) |
 | `.env.example` | Variáveis de ambiente (copiar para `.env`) |
-| `gateway/kong.yml` | Rotas e plugins do Kong (modo declarativo) |
+| `gateway/kong.yml` | Rotas, JWT/ACL, rate limit e plugins do Kong (modo declarativo) |
+| `services/bff-contratante/`, `services/bff-prestador/` | BFFs (FastAPI) |
+| `scripts/` | `generate_jwt.py` (tokens de teste), `sync-kong-configmap.sh` (kong.yml → ConfigMap do k8s) |
 | `services/_template-fastapi/` | Base para todos os serviços Python |
-| `k8s/` | Manifestos Kubernetes |
+| `k8s/` | Manifestos Kubernetes + guia (`k8s/README.md`) |
 | `docs/` | Documentação de arquitetura (seções 1 a 4) |
 | `.ai-memory/` | Memória compartilhada do projeto: arquitetura, estado, decisões |
 | `.github/copilot-instructions.md`, `.cursorrules` | Instruções para agentes de IA no VS Code |

@@ -48,7 +48,8 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    return problem(request, 422, "Validation Error", "Corpo ou parâmetros inválidos.", errors=exc.errors())
+    errors = [{"loc": e["loc"], "msg": e["msg"], "type": e["type"]} for e in exc.errors()]
+    return problem(request, 422, "Validation Error", "Corpo ou parâmetros inválidos.", errors=errors)
 
 
 @app.exception_handler(Exception)

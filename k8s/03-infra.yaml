@@ -25,11 +25,13 @@ spec:
           readinessProbe:
             exec:
               command: ["rabbitmq-diagnostics", "-q", "ping"]
-            initialDelaySeconds: 20
-            periodSeconds: 15
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 10      # padrão era 1s: o ping demora mais que isso no primeiro boot
+            failureThreshold: 6
           resources:
             requests: {cpu: 100m, memory: 256Mi}
-            limits: {cpu: 500m, memory: 512Mi}
+            limits: {cpu: 1000m, memory: 1Gi}
 ---
 apiVersion: v1
 kind: Service
@@ -77,3 +79,405 @@ spec:
   selector: {app: redis}
   ports:
     - {port: 6379, targetPort: 6379}
+
+# ===================================================================
+# PostgreSQL — database per service (um Deployment + PVC + Service por banco).
+# Credenciais vêm do Secret `resolvelar-secrets`. Enquanto os ms-* não estão no cluster,
+# nenhum serviço consome estes bancos ainda.
+# ===================================================================
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-prestadores-write
+  namespace: resolvelar
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db-prestadores-write
+  namespace: resolvelar
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate        # volume RWO: nunca dois pods no mesmo disco
+  selector:
+    matchLabels: {app: db-prestadores-write}
+  template:
+    metadata:
+      labels: {app: db-prestadores-write}
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: prestadores_write
+            - name: POSTGRES_USER
+              valueFrom: {secretKeyRef: {name: resolvelar-secrets, key: POSTGRES_USER}}
+            - name: POSTGRES_PASSWORD
+              valueFrom: {secretKeyRef: {name: resolvelar-secrets, key: POSTGRES_PASSWORD_PRESTADORES_WRITE}}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 50m, memory: 96Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: pvc-prestadores-write
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db-prestadores-write
+  namespace: resolvelar
+spec:
+  selector: {app: db-prestadores-write}
+  ports:
+    - {port: 5432, targetPort: 5432}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-prestadores-read
+  namespace: resolvelar
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db-prestadores-read
+  namespace: resolvelar
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate        # volume RWO: nunca dois pods no mesmo disco
+  selector:
+    matchLabels: {app: db-prestadores-read}
+  template:
+    metadata:
+      labels: {app: db-prestadores-read}
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: prestadores_read
+            - name: POSTGRES_USER
+              valueFrom: {secretKeyRef: {name: resolvelar-secrets, key: POSTGRES_USER}}
+            - name: POSTGRES_PASSWORD
+              valueFrom: {secretKeyRef: {name: resolvelar-secrets, key: POSTGRES_PASSWORD_PRESTADORES_READ}}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 50m, memory: 96Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: pvc-prestadores-read
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db-prestadores-read
+  namespace: resolvelar
+spec:
+  selector: {app: db-prestadores-read}
+  ports:
+    - {port: 5432, targetPort: 5432}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-solicitacoes
+  namespace: resolvelar
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db-solicitacoes
+  namespace: resolvelar
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate        # volume RWO: nunca dois pods no mesmo disco
+  selector:
+    matchLabels: {app: db-solicitacoes}
+  template:
+    metadata:
+      labels: {app: db-solicitacoes}
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: solicitacoes
+            - name: POSTGRES_USER
+              valueFrom: {secretKeyRef: {name: resolvelar-secrets, key: POSTGRES_USER}}
+            - name: POSTGRES_PASSWORD
+              valueFrom: {secretKeyRef: {name: resolvelar-secrets, key: POSTGRES_PASSWORD_SOLICITACOES}}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 50m, memory: 96Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: pvc-solicitacoes
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db-solicitacoes
+  namespace: resolvelar
+spec:
+  selector: {app: db-solicitacoes}
+  ports:
+    - {port: 5432, targetPort: 5432}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-agendamentos
+  namespace: resolvelar
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db-agendamentos
+  namespace: resolvelar
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate        # volume RWO: nunca dois pods no mesmo disco
+  selector:
+    matchLabels: {app: db-agendamentos}
+  template:
+    metadata:
+      labels: {app: db-agendamentos}
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: agendamentos
+            - name: POSTGRES_USER
+              valueFrom: {secretKeyRef: {name: resolvelar-secrets, key: POSTGRES_USER}}
+            - name: POSTGRES_PASSWORD
+              valueFrom: {secretKeyRef: {name: resolvelar-secrets, key: POSTGRES_PASSWORD_AGENDAMENTOS}}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 50m, memory: 96Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: pvc-agendamentos
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db-agendamentos
+  namespace: resolvelar
+spec:
+  selector: {app: db-agendamentos}
+  ports:
+    - {port: 5432, targetPort: 5432}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-pagamentos
+  namespace: resolvelar
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db-pagamentos
+  namespace: resolvelar
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate        # volume RWO: nunca dois pods no mesmo disco
+  selector:
+    matchLabels: {app: db-pagamentos}
+  template:
+    metadata:
+      labels: {app: db-pagamentos}
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: pagamentos
+            - name: POSTGRES_USER
+              valueFrom: {secretKeyRef: {name: resolvelar-secrets, key: POSTGRES_USER}}
+            - name: POSTGRES_PASSWORD
+              valueFrom: {secretKeyRef: {name: resolvelar-secrets, key: POSTGRES_PASSWORD_PAGAMENTOS}}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 50m, memory: 96Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: pvc-pagamentos
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db-pagamentos
+  namespace: resolvelar
+spec:
+  selector: {app: db-pagamentos}
+  ports:
+    - {port: 5432, targetPort: 5432}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-avaliacoes
+  namespace: resolvelar
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db-avaliacoes
+  namespace: resolvelar
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate        # volume RWO: nunca dois pods no mesmo disco
+  selector:
+    matchLabels: {app: db-avaliacoes}
+  template:
+    metadata:
+      labels: {app: db-avaliacoes}
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: avaliacoes
+            - name: POSTGRES_USER
+              valueFrom: {secretKeyRef: {name: resolvelar-secrets, key: POSTGRES_USER}}
+            - name: POSTGRES_PASSWORD
+              valueFrom: {secretKeyRef: {name: resolvelar-secrets, key: POSTGRES_PASSWORD_AVALIACOES}}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 50m, memory: 96Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: pvc-avaliacoes
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db-avaliacoes
+  namespace: resolvelar
+spec:
+  selector: {app: db-avaliacoes}
+  ports:
+    - {port: 5432, targetPort: 5432}

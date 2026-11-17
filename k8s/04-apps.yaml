@@ -1,0 +1,161 @@
+# Aplicações: BFFs (2 réplicas cada) + Kong (1 réplica, kong.yml vindo do ConfigMap kong-config).
+# As imagens são locais (docker build) e carregadas no cluster: por isso imagePullPolicy: IfNotPresent.
+# Parte 3 — Escalabilidade: `kubectl scale deployment bff-contratante --replicas=3 -n resolvelar`
+# e observe o header X-Pod-Name alternar entre os Pods (ver k8s/README.md).
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bff-contratante
+  namespace: resolvelar
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: bff-contratante}
+  template:
+    metadata:
+      labels: {app: bff-contratante}
+    spec:
+      containers:
+        - name: bff-contratante
+          image: resolvelar/bff-contratante:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: SERVICE_NAME
+              value: bff-contratante
+          envFrom:
+            - configMapRef: {name: resolvelar-config}
+          readinessProbe:
+            httpGet: {path: /health, port: 8000}
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /health, port: 8000}
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 300m, memory: 192Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bff-contratante
+  namespace: resolvelar
+spec:
+  type: ClusterIP
+  selector: {app: bff-contratante}
+  ports:
+    - {port: 8000, targetPort: 8000}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bff-prestador
+  namespace: resolvelar
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: bff-prestador}
+  template:
+    metadata:
+      labels: {app: bff-prestador}
+    spec:
+      containers:
+        - name: bff-prestador
+          image: resolvelar/bff-prestador:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: SERVICE_NAME
+              value: bff-prestador
+          envFrom:
+            - configMapRef: {name: resolvelar-config}
+          readinessProbe:
+            httpGet: {path: /health, port: 8000}
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /health, port: 8000}
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 300m, memory: 192Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bff-prestador
+  namespace: resolvelar
+spec:
+  type: ClusterIP
+  selector: {app: bff-prestador}
+  ports:
+    - {port: 8000, targetPort: 8000}
+---
+# Kong em modo DB-less. A configuração é o MESMO gateway/kong.yml do Compose,
+# empacotado no ConfigMap kong-config (k8s/01-kong-config.yaml).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kong
+  namespace: resolvelar
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: kong}
+  template:
+    metadata:
+      labels: {app: kong}
+    spec:
+      containers:
+        - name: kong
+          image: kong:3.6
+          imagePullPolicy: IfNotPresent
+          ports:
+            - {containerPort: 8000, name: proxy}
+            - {containerPort: 8001, name: admin}
+          env:
+            - {name: KONG_DATABASE, value: "off"}
+            - {name: KONG_DECLARATIVE_CONFIG, value: /kong/kong.yml}
+            - {name: KONG_PROXY_LISTEN, value: "0.0.0.0:8000"}
+            # Admin só no localhost do Pod (não exposto pelo Service). Para inspecionar: kubectl port-forward / exec.
+            - {name: KONG_ADMIN_LISTEN, value: "127.0.0.1:8001"}
+            # Keep-alive com os BFFs: o kube-proxy só escolhe o Pod na abertura da conexão.
+            # Com pool sem reuso, cada requisição abre conexão nova e cai em um Pod diferente.
+            - {name: KONG_UPSTREAM_KEEPALIVE_POOL_SIZE, value: "0"}
+            - {name: KONG_UPSTREAM_KEEPALIVE_MAX_REQUESTS, value: "1"}
+            - {name: KONG_PROXY_ACCESS_LOG, value: /dev/stdout}
+            - {name: KONG_PROXY_ERROR_LOG, value: /dev/stderr}
+            - {name: KONG_ADMIN_ACCESS_LOG, value: /dev/stdout}
+            - {name: KONG_ADMIN_ERROR_LOG, value: /dev/stderr}
+          volumeMounts:
+            - {name: kong-config, mountPath: /kong, readOnly: true}
+          readinessProbe:
+            exec:
+              command: ["kong", "health"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            # Kong estourava 512Mi (OOMKilled) com o kong.yml completo: 1Gi de teto
+            requests: {cpu: 100m, memory: 384Mi}
+            limits: {cpu: 500m, memory: 1Gi}
+      volumes:
+        - name: kong-config
+          configMap:
+            name: kong-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kong
+  namespace: resolvelar
+spec:
+  type: ClusterIP
+  selector: {app: kong}
+  ports:
+    - {name: proxy, port: 8000, targetPort: 8000}

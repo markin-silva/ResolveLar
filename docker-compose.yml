@@ -33,6 +33,39 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      bff-contratante:
+        condition: service_healthy
+      bff-prestador:
+        condition: service_healthy
+
+  # ---------- BFFs (sem banco próprio; só a rede interna) ----------
+  bff-contratante:
+    build: ./services/bff-contratante
+    image: resolvelar/bff-contratante:latest
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: bff-contratante
+      ENABLE_UPSTREAM_MOCK: ${ENABLE_UPSTREAM_MOCK:-true}
+      HTTP_TIMEOUT_SECONDS: ${HTTP_TIMEOUT_SECONDS:-3}
+      MS_PRESTADORES_URL: ${MS_PRESTADORES_URL}
+      MS_SOLICITACOES_URL: ${MS_SOLICITACOES_URL}
+      MS_PAGAMENTOS_URL: ${MS_PAGAMENTOS_URL}
+      MS_AVALIACOES_URL: ${MS_AVALIACOES_URL}
+    networks: [internal_net]
+
+  bff-prestador:
+    build: ./services/bff-prestador
+    image: resolvelar/bff-prestador:latest
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: bff-prestador
+      ENABLE_UPSTREAM_MOCK: ${ENABLE_UPSTREAM_MOCK:-true}
+      HTTP_TIMEOUT_SECONDS: ${HTTP_TIMEOUT_SECONDS:-3}
+      MS_SOLICITACOES_URL: ${MS_SOLICITACOES_URL}
+      MS_AGENDAMENTOS_URL: ${MS_AGENDAMENTOS_URL}
+      MS_PAGAMENTOS_URL: ${MS_PAGAMENTOS_URL}
+      MS_PRESTADORES_URL: ${MS_PRESTADORES_URL}
+    networks: [internal_net]
 
   # ---------- Infra ----------
   rabbitmq:
@@ -115,8 +148,8 @@ services:
     volumes:
       - pg_avaliacoes:/var/lib/postgresql/data
 
-  # Serviços de aplicação (BFFs, ms-*, web-*) serão adicionados nas próximas tarefas
-  # a partir de services/_template-fastapi/.
+  # Microsserviços (ms-*) e frontends (web-*) serão adicionados pelos demais integrantes
+  # a partir de services/_template-fastapi/. Enquanto não existirem, os BFFs usam ENABLE_UPSTREAM_MOCK=true.
 
 networks:
   edge_net:
