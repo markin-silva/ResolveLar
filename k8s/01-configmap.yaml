@@ -1,0 +1,32 @@
+# Configuração NÃO sensível (hosts, URLs internas, flags). Segredos ficam em 02-secret.yaml.
+# Os BFFs carregam este ConfigMap inteiro via envFrom.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: resolvelar-config
+  namespace: resolvelar
+data:
+  # --- Infra ---
+  RABBITMQ_HOST: rabbitmq
+  REDIS_URL: redis://redis:6379/0
+  DB_PRESTADORES_WRITE_HOST: db-prestadores-write
+  DB_PRESTADORES_READ_HOST: db-prestadores-read
+  DB_SOLICITACOES_HOST: db-solicitacoes
+  DB_AGENDAMENTOS_HOST: db-agendamentos
+  DB_PAGAMENTOS_HOST: db-pagamentos
+  DB_AVALIACOES_HOST: db-avaliacoes
+
+  # --- URLs internas dos serviços (Services do Kubernetes = DNS interno) ---
+  MS_PRESTADORES_URL: http://ms-prestadores:8000
+  MS_SOLICITACOES_URL: http://ms-solicitacoes:8000
+  MS_AGENDAMENTOS_URL: http://ms-agendamentos:8000
+  MS_PAGAMENTOS_URL: http://ms-pagamentos:8000
+  MS_AVALIACOES_URL: http://ms-avaliacoes:8000
+  HTTP_TIMEOUT_SECONDS: "3"
+
+  # --- BFFs ---
+  # "true" enquanto os microsserviços de domínio não estão no cluster: os BFFs devolvem
+  # payloads de exemplo (header X-Mock-Upstream: true). Mude para "false" quando os ms-* subirem:
+  #   kubectl -n resolvelar patch configmap resolvelar-config -p '{"data":{"ENABLE_UPSTREAM_MOCK":"false"}}'
+  #   kubectl -n resolvelar rollout restart deployment/bff-contratante deployment/bff-prestador
+  ENABLE_UPSTREAM_MOCK: "true"

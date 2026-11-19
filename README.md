@@ -91,11 +91,156 @@ A ResolveLar será estruturada utilizando uma arquitetura baseada em
 microsserviços, com API Gateway, clientes distintos para contratantes
 e prestadores e bancos de dados independentes por serviço.
 
-➡️ [Visualizar o esboço da arquitetura](arquitetura.md)
+➡️ Documentação de arquitetura em [`docs/`](docs/):
+- [01 — Decomposição em microsserviços e banco de dados](docs/01-decomposicao-e-dados.md)
+- [02 — Gateway e BFF](docs/02-gateway-e-bff.md)
+- [03 — SAGA orquestrada (aceite de orçamento)](docs/03-saga-orquestrada.md)
+- [04 — REST, HATEOAS e CQRS](docs/04-rest-e-cqrs.md)
 
-## 6. Instruções de Execução
+## 6. Como o projeto funciona
 
-Em progresso — As instruções completas para levantar a arquitetura de microsserviços via Docker-Compose e Kubernetes local serão atualizadas nas próximas entregas.
+```
+Navegador ──► Kong :8000 ──► BFF (contratante ou prestador) ──► microsserviços ──► PostgreSQL (um por serviço)
+                 │                                                     │
+              Redis                                     RabbitMQ (eventos)
+           (rate limit)
+```
+
+- **Kong** (API Gateway) é a única porta de entrada. Remove o prefixo `/v1/contratante` ou `/v1/prestador`, gera o `X-Correlation-Id` e aplica CORS e rate limit.
+- **BFFs** (`bff-contratante`, `bff-prestador`) montam a resposta de cada tela. Não têm banco próprio.
+- **Microsserviços** são donos dos dados: `ms-prestadores`, `ms-solicitacoes` (orquestrador da SAGA), `ms-agendamentos`, `ms-pagamentos` e `ms-avaliacoes`.
+- **Aceite de orçamento (SAGA):** `POST /v1/orcamentos/{id}/aprovacao` responde `202`. O `ms-solicitacoes` reserva o horário no `ms-agendamentos` e cobra no `ms-pagamentos`. Se o pagamento for recusado, a reserva é liberada (compensação). O resultado chega por evento no RabbitMQ.
+- **CQRS:** o `ms-prestadores` grava no banco de escrita e um projetor atualiza o banco de leitura desnormalizado, usado nas buscas.
+
+Detalhes e contratos: [`.ai-memory/ARCHITECTURE.md`](.ai-memory/ARCHITECTURE.md).
+
+### Estado atual
+
+| Parte | Situação |
+|---|---|
+| Infraestrutura (Kong, Redis, RabbitMQ, 6× PostgreSQL) | Pronta, sobe com `docker compose up` |
+| Kong: JWT + ACL por perfil, rate limit por rota, CORS, correlation-id | Pronto (usuários de teste, ver abaixo) |
+| `bff-contratante` e `bff-prestador` | Prontos. Enquanto os `ms-*` não existem, respondem com **dados de exemplo** (`ENABLE_UPSTREAM_MOCK=true`) |
+| Microsserviços de domínio (`ms-*`) | **Não implementados ainda** |
+| Kubernetes (Kong + BFFs + infra, demo de escalabilidade) | Manifestos em [`k8s/`](k8s/); validados com `kubeconform`, **ainda não aplicados em cluster real** |
+| Frontends (React/Vite) | Pendentes |
+
+Acompanhe o andamento em [`.ai-memory/PROJECT_STATE.md`](.ai-memory/PROJECT_STATE.md).
+
+## 7. Como rodar
+
+### Pré-requisitos
+- Docker e Docker Compose v2 (`docker compose version`)
+- `curl` (para os testes abaixo)
+
+### Primeira vez
+
+```bash
+git clone <url-do-repositorio> ResolveLar
+cd ResolveLar
+cp .env.example .env     # cria o arquivo de configuração local
+docker compose up -d
+docker compose ps        # todos devem aparecer "healthy"
+```
+
+O `.env` é o arquivo com as senhas locais. Ele **não vai para o Git** (está no `.gitignore`). Os valores de `.env.example` são placeholders: troque as senhas se for usar o projeto fora da sala de aula.
+
+### Testar que está funcionando
+
+O gateway exige JWT. Gere tokens de teste (usuários `contratante_15` e `prest_17`):
+
+```bash
+eval "$(python3 scripts/generate_jwt.py | grep export)"    # cria $TOKEN_CONTRATANTE e $TOKEN_PRESTADOR
+```
+
+```bash
+# Gateway
+curl -i http://localhost:8000/nada                                                   # 404
+curl -i http://localhost:8000/v1/contratante/prestadores                             # 401 (sem token)
+curl -s -H "Authorization: Bearer $TOKEN_CONTRATANTE" http://localhost:8000/v1/contratante/prestadores          # 200
+curl -si -H "Authorization: Bearer $TOKEN_CONTRATANTE" http://localhost:8000/v1/prestador/tarefas/sol_8f21 | head -1   # 403 (perfil errado)
+curl -s -H "Authorization: Bearer $TOKEN_PRESTADOR" http://localhost:8000/v1/prestador/tarefas/sol_8f21               # 200 (técnico + financeiro)
+curl -s -H "Authorization: Bearer $TOKEN_CONTRATANTE" http://localhost:8000/v1/contratante/solicitacoes/sol_8f21/orcamentos   # comparação de orçamentos
+curl -s http://127.0.0.1:8001/status                                                 # admin do Kong (200)
+
+# Infraestrutura
+docker compose exec redis redis-cli ping                       # PONG
+docker compose exec rabbitmq rabbitmq-diagnostics -q ping      # Ping succeeded
+docker compose exec db-agendamentos pg_isready -U resolvelar -d agendamentos
+```
+
+> **Painel do RabbitMQ:** a porta 15672 **não está publicada** no host, então `http://localhost:15672` não abre. Para usá-lo, adicione `"127.0.0.1:15672:15672"` à seção `ports` do serviço `rabbitmq` no `docker-compose.yml`. Enquanto isso, use os comandos `docker compose exec rabbitmq ...`.
+
+### Dados de exemplo (mock) nos BFFs
+
+Com `ENABLE_UPSTREAM_MOCK=true` (padrão), se um microsserviço não estiver no ar o BFF devolve payloads de exemplo da `docs/02` e marca a resposta com `X-Mock-Upstream: true`. Um serviço que **responde** nunca é mockado, então cada integrante pode subir o seu `ms-*` (com o hostname de `.ai-memory/ARCHITECTURE.md`, na `internal_net`) e o BFF passa a usá-lo sozinho. Rotas esperadas: `.ai-memory/DECISIONS_LOG.md`, item 20. Com `false`, falhas viram `503` (dado essencial) ou o bloco é omitido (dado opcional).
+
+### Testar um microsserviço (template)
+
+Todo serviço novo começa a partir de `services/_template-fastapi`:
+
+```bash
+cd services/_template-fastapi
+docker build -t resolvelar/template-fastapi:test .
+docker run -d --name tpl -p 127.0.0.1:8100:8000 resolvelar/template-fastapi:test
+curl -s http://127.0.0.1:8100/health      # {"status":"ok",...}
+docker rm -f tpl
+```
+
+### Parar
+
+```bash
+docker compose down       # para e mantém os dados dos bancos
+docker compose down -v    # para e APAGA os dados (zera os bancos)
+```
+
+### Problemas comuns
+
+| Sintoma | Causa provável | O que fazer |
+|---|---|---|
+| `port is already allocated` na 8000 | Outro programa usa a porta 8000 | Pare o outro programa ou mude a porta em `docker-compose.yml` |
+| Contêiner `unhealthy` | Banco ou broker ainda iniciando | Aguarde 30s e rode `docker compose ps` de novo; se persistir, `docker compose logs <servico>` |
+| `DATABASE_URL não configurada` | Serviço sem variável de ambiente | Confira o `.env` e o bloco `environment` do serviço no compose |
+| `401` mesmo com token | Token expirado (24h) ou segredo diferente | Gere outro: `python3 scripts/generate_jwt.py` |
+| `429` ao testar | Rate limit (10/h criar solicitação, 30/h criar orçamento) | Zere os contadores: `docker compose exec redis redis-cli FLUSHALL` |
+| Editou o `gateway/kong.yml` e nada mudou | O Kong só lê o arquivo ao iniciar | `docker compose restart kong` (e `./scripts/sync-kong-configmap.sh` para o k8s) |
+| Mudou a senha no `.env` e o banco não aceita | Volume já criado com a senha antiga | `docker compose down -v` (apaga os dados) e suba de novo |
+
+### Kubernetes (Parte 3)
+
+Guia completo (kind/Minikube, carregar imagens, validar e **demonstração de escalabilidade** com `kubectl scale` + header `X-Pod-Name`): [`k8s/README.md`](k8s/README.md). Resumo:
+
+```bash
+docker build -t resolvelar/bff-contratante:latest services/bff-contratante
+docker build -t resolvelar/bff-prestador:latest   services/bff-prestador
+# carregue as imagens no cluster (ver k8s/README.md) e então:
+kubectl apply -f k8s/
+```
+
+Os manifestos passam no `kubeconform`, mas ainda não foram aplicados em cluster real. O `02-secret.yaml` contém valores de exemplo; em ambiente real, crie os segredos fora do Git.
+
+## 8. Estrutura do repositório
+
+| Caminho | Conteúdo |
+|---|---|
+| `docker-compose.yml` | Infraestrutura local (Kong, Redis, RabbitMQ, bancos) |
+| `.env.example` | Variáveis de ambiente (copiar para `.env`) |
+| `gateway/kong.yml` | Rotas, JWT/ACL, rate limit e plugins do Kong (modo declarativo) |
+| `services/bff-contratante/`, `services/bff-prestador/` | BFFs (FastAPI) |
+| `scripts/` | `generate_jwt.py` (tokens de teste), `sync-kong-configmap.sh` (kong.yml → ConfigMap do k8s) |
+| `services/_template-fastapi/` | Base para todos os serviços Python |
+| `k8s/` | Manifestos Kubernetes + guia (`k8s/README.md`) |
+| `docs/` | Documentação de arquitetura (seções 1 a 4) |
+| `.ai-memory/` | Memória compartilhada do projeto: arquitetura, estado, decisões |
+| `.github/copilot-instructions.md`, `.cursorrules` | Instruções para agentes de IA no VS Code |
+
+## 9. Como contribuir
+
+1. Antes de codar, leia `.ai-memory/ARCHITECTURE.md`, `PROJECT_STATE.md` e `DECISIONS_LOG.md`.
+2. Nomes de hosts, portas, filas e rotas devem seguir o `ARCHITECTURE.md`. Mudança de contrato, endpoint, evento ou variável de ambiente vai para o `DECISIONS_LOG.md`.
+3. Nunca commite credenciais. Use variáveis de ambiente (`.env` local, ConfigMap/Secret no Kubernetes).
+4. Ao concluir uma tarefa, atualize o `PROJECT_STATE.md`.
+5. Commits no padrão [Conventional Commits](https://www.conventionalcommits.org/), em inglês (ex.: `feat(pagamentos): implement transactional outbox relay`).
 
 ## Referências
 

@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+sqlmodel
+psycopg2-binary
+pydantic-settings
+httpx
+aio-pika
+redis
