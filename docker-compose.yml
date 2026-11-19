@@ -51,6 +51,7 @@ services:
       MS_SOLICITACOES_URL: ${MS_SOLICITACOES_URL}
       MS_PAGAMENTOS_URL: ${MS_PAGAMENTOS_URL}
       MS_AVALIACOES_URL: ${MS_AVALIACOES_URL}
+      MS_TRIAGEM_URL: ${MS_TRIAGEM_URL:-http://ms-triagem:8000}
     networks: [internal_net]
 
   bff-prestador:
@@ -148,8 +149,66 @@ services:
     volumes:
       - pg_avaliacoes:/var/lib/postgresql/data
 
-  # Microsserviços (ms-*) e frontends (web-*) serão adicionados pelos demais integrantes
-  # a partir de services/_template-fastapi/. Enquanto não existirem, os BFFs usam ENABLE_UPSTREAM_MOCK=true.
+  # ---------- Microsserviços (Frente 3: CQRS, avaliações e IA) ----------
+  # ms-prestadores: CQRS (comandos -> write DB + outbox; projetor RabbitMQ -> read DB; consultas + Redis)
+  ms-prestadores:
+    build: ./services/ms-prestadores
+    image: resolvelar/ms-prestadores:latest
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: ms-prestadores
+      DATABASE_URL_WRITE: ${DATABASE_URL_PRESTADORES_WRITE}
+      DATABASE_URL_READ: ${DATABASE_URL_PRESTADORES_READ}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+      REDIS_URL: ${REDIS_URL}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
+    networks: [internal_net]
+    depends_on:
+      db-prestadores-write: {condition: service_healthy}
+      db-prestadores-read: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+      redis: {condition: service_healthy}
+
+  # ms-avaliacoes: publica AvaliacaoRegistrada (outbox) -> projetor do ms-prestadores atualiza notaMedia
+  ms-avaliacoes:
+    build: ./services/ms-avaliacoes
+    image: resolvelar/ms-avaliacoes:latest
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: ms-avaliacoes
+      DATABASE_URL: ${DATABASE_URL_AVALIACOES}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
+    networks: [internal_net]
+    depends_on:
+      db-avaliacoes: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+
+  # ms-triagem: Assistente de Triagem (LangChain + ChromaDB embarcado + cache Redis + fallback).
+  # É o único ms com saída para a internet (egress_net), para chamar a API do LLM.
+  ms-triagem:
+    build: ./services/ms-triagem
+    image: resolvelar/ms-triagem:latest
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: ms-triagem
+      REDIS_URL: ${REDIS_URL}
+      MS_PRESTADORES_URL: ${MS_PRESTADORES_URL}
+      LLM_PROVIDER: ${LLM_PROVIDER:-auto}
+      LLM_MODEL: ${LLM_MODEL:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-4.5}
+      LLM_TOTAL_BUDGET_SECONDS: ${LLM_TOTAL_BUDGET_SECONDS:-5}
+    volumes:
+      - chroma_data:/data/chroma
+    networks: [internal_net, egress_net]
+    depends_on:
+      redis: {condition: service_healthy}
+      ms-prestadores: {condition: service_healthy}
+
+  # Demais microsserviços (ms-solicitacoes, ms-agendamentos, ms-pagamentos) e frontends (web-*) são
+  # adicionados pelas outras frentes. Enquanto não existirem, os BFFs usam ENABLE_UPSTREAM_MOCK=true.
 
 networks:
   edge_net:
@@ -157,6 +216,9 @@ networks:
   internal_net:
     driver: bridge
     internal: true
+  # saída para a internet só para quem precisa de API externa (ms-triagem -> LLM)
+  egress_net:
+    driver: bridge
 
 volumes:
   pg_prestadores_write:
@@ -166,3 +228,4 @@ volumes:
   pg_pagamentos:
   pg_avaliacoes:
   rabbitmq_data:
+  chroma_data:
