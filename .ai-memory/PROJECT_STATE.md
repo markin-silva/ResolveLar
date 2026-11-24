@@ -30,17 +30,17 @@ Legenda: `[x]` pronto · `[ ]` pendente. Atualize ao concluir cada item (arquivo
 - [ ] Dockerfiles + K8s desses serviços
 
 ## Integrante 4 — Frontends
-- [ ] `web-contratante` (triagem IA, busca CQRS, comparação de orçamentos, aprovação com cartão válido e recusado mostrando compensação da SAGA)
-- [ ] `web-prestador`
-- [ ] Dockerfiles multi-stage Nginx + K8s
+- [x] `web-contratante` (triagem IA, busca de prestadores, comparação de orçamentos, aprovação com cartões de teste aprovado/recusado e visualização da resposta da API)
+- [x] `web-prestador` (consulta de tarefa e envio de orçamento)
+- [x] Dockerfiles multi-stage Nginx + serviços no Compose; manifests K8s dispensados por orientação do professor
 
 ## Por etapa
 ### Parte 3 — Docker & Kubernetes
 - [x] Compose de infraestrutura base + BFFs
 - [x] Manifests K8s completos para gateway/BFFs/infra (testados em kind)
-- [ ] Compose e K8s dos `ms-*` e `web-*` (cada integrante adiciona os seus)
+- [x] Compose dos `web-*`; manifests K8s dos frontends dispensados por orientação do professor
 ### Parte 4 — Microsserviços, SAGA, CQRS, RAG, Frontends
-- [ ] Microsserviços · [ ] SAGA · [ ] CQRS · [ ] RAG/LangChain · [ ] Frontends
+- [ ] Microsserviços · [ ] SAGA · [ ] CQRS · [ ] RAG/LangChain · [x] Frontends (a integração real depende dos endpoints das demais frentes)
 
 ## Endpoints reais implementados
 - Template: `GET /health` (cada serviço derivado herda).
@@ -52,3 +52,4 @@ Legenda: `[x]` pronto · `[ ]` pendente. Atualize ao concluir cada item (arquivo
 - Divergências docs × implementação: JWT/ACL e rate limit por rota foram implementados (itens 11–12 do log estão resolvidos, ver 17). Segue o item 10 (Elasticsearch × Postgres).
 - Auth resolvida para o MVP: JWT com consumers de teste no Kong (ver `DECISIONS_LOG.md` 17). Sem emissor/`POST /auth/*` real.
 - **Como integrar seu `ms-*` aos BFFs:** ver `DECISIONS_LOG.md` itens 18–20 (headers, `ENABLE_UPSTREAM_MOCK` e rotas esperadas).
+- **Frontends (branch `feat/web-contratante-prestador`):** apps separados em `clients/web-contratante` (porta 3000) e `clients/web-prestador` (porta 3001), servidos por Nginx e roteando `/v1/` ao Kong. O modo demonstração usa dados identificados como fictícios; modo conectado exige JWT de teste e chama as rotas BFF. A rota de triagem IA prevista no PR #7 e os serviços reais precisam estar integrados/ativos para validar o fluxo ponta a ponta.
