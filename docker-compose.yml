@@ -224,6 +224,7 @@ services:
       SERVICE_NAME: ms-avaliacoes
       DATABASE_URL: ${DATABASE_URL_AVALIACOES}
       RABBITMQ_URL: ${RABBITMQ_URL}
+      MS_SOLICITACOES_URL: ${MS_SOLICITACOES_URL}
       SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
     networks: [internal_net]
     depends_on:

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from pydantic import AwareDatetime, BaseModel, Field as InputField, model_validator
 from sqlmodel import Field, Session, SQLModel, select
 
@@ -84,8 +84,25 @@ def liberar_reserva(reserva_id: str):
 
 
 @app.get("/v1/agendamentos")
-def listar(solicitacao_id: str):
+def listar(request: Request, solicitacao_id: str | None = None, prestador_id: str | None = None,
+           de: str | None = None, ate: str | None = None):
+    """Por `solicitacao_id` (detalhe da tarefa) ou por `prestador_id` (agenda do profissional, com janela
+    opcional `de`/`ate` em ISO-8601). Reservas liberadas não contam. O prestador só vê a própria agenda."""
+    if not solicitacao_id and not prestador_id:
+        raise HTTPException(422, "Informe solicitacao_id ou prestador_id")
+    if prestador_id:
+        user = request.headers.get("X-User-Id")
+        if user and request.headers.get("X-User-Role") == "prestador" and user != prestador_id:
+            raise HTTPException(403, "Só é possível consultar a própria agenda")
     with Session(engine) as session:
-        rows = session.exec(select(Reserva).where(Reserva.solicitacaoId == solicitacao_id,
-                                                 Reserva.status != "LIBERADA")).all()
+        stmt = select(Reserva).where(Reserva.status != "LIBERADA")
+        if solicitacao_id:
+            stmt = stmt.where(Reserva.solicitacaoId == solicitacao_id)
+        if prestador_id:
+            stmt = stmt.where(Reserva.prestadorId == prestador_id)
+        if de:
+            stmt = stmt.where(Reserva.fim >= de)
+        if ate:
+            stmt = stmt.where(Reserva.inicio <= ate)
+        rows = session.exec(stmt.order_by(Reserva.inicio)).all()
         return {"items": [output(row) for row in rows]}

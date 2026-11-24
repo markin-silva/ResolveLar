@@ -5,3 +5,4 @@ SQLAlchemy==2.1.9
 psycopg[binary]==3.3.9
 pydantic-settings==2.16.3
 aio-pika==10.2.3
+httpx==0.28.1

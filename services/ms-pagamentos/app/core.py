@@ -29,7 +29,7 @@ def uid(prefix):
 def database_url():
     if os.getenv("DATABASE_URL"):
         return os.environ["DATABASE_URL"]
-    return URL.create("postgresql+psycopg2", username=os.environ["POSTGRES_USER"],
+    return URL.create("postgresql+psycopg", username=os.environ["POSTGRES_USER"],
                       password=os.environ["POSTGRES_PASSWORD"], host=os.environ["DB_HOST"],
                       database=os.environ["DB_NAME"])
 

@@ -22,6 +22,8 @@ STATUS_LEGIVEL = {
 }
 
 
+STATUS_AVALIAVEL = {"CONFIRMADA", "CONCLUIDA"}  # o serviço já foi contratado e confirmado
+
 GW = "/v1/contratante"  # prefixo público (Kong): os links devolvidos ao cliente já apontam para o gateway
 
 
@@ -56,6 +58,8 @@ class Endereco(BaseModel):
     cep: str
     cidade: str
     uf: str = Field(min_length=2, max_length=2)
+    bairro: str | None = None
+    logradouro: str | None = None  # o prestador só o vê depois da confirmação
 
 
 class SolicitacaoIn(BaseModel):
@@ -72,7 +76,7 @@ class TriagemIn(BaseModel):
 
 
 class AvaliacaoIn(BaseModel):
-    prestadorId: str
+    # O prestador NÃO vem do cliente: o BFF o lê da solicitação (evita avaliar quem não atendeu).
     nota: int = Field(ge=1, le=5)
     comentario: str | None = Field(default=None, max_length=1000)
 
@@ -123,11 +127,54 @@ async def triagem(body: TriagemIn, request: Request, user: User = Depends(curren
 @app.post("/solicitacoes/{solicitacao_id}/avaliacao")
 async def avaliar_servico(solicitacao_id: str, body: AvaliacaoIn, request: Request,
                           user: User = Depends(current_user)):
-    """Avaliação do serviço (ms-avaliacoes): 201; 409 se a solicitação já foi avaliada."""
+    """Avaliação do serviço (ms-avaliacoes). Regras aplicadas aqui:
+    - só o contratante dono da solicitação avalia (403);
+    - só quando o serviço foi confirmado (409);
+    - o `prestadorId` é o da solicitação, nunca o do corpo.
+    O ms-avaliacoes ainda garante uma avaliação por solicitação (409)."""
+    headers = upstream_headers(request, user)
+    async with new_client() as client:
+        (result,) = await asyncio.gather(
+            client.get(f"{settings.MS_SOLICITACOES_URL}/v1/solicitacoes/{solicitacao_id}", headers=headers),
+            return_exceptions=True)
+    sol = unwrap(request, result, lambda: mock_data.solicitacao(solicitacao_id, user.id))
+    dono = pick(sol, "contratanteId", "contratante_id")
+    if dono and dono != user.id:
+        raise ApiError(403, "Forbidden", "Esta solicitação pertence a outro contratante.")
+    if pick(sol, "status") not in STATUS_AVALIAVEL:
+        raise ApiError(409, "Conflict", "Só é possível avaliar depois que o serviço for confirmado.")
+    prestador_id = pick(sol, "prestadorId", "prestador_id")
+    if not prestador_id:
+        raise ApiError(409, "Conflict", "Esta solicitação ainda não tem um profissional definido.")
+    payload = {**body.model_dump(mode="json", exclude_none=True), "prestadorId": prestador_id}
     return await forward_write(
         request, "POST", f"{settings.MS_AVALIACOES_URL}/v1/solicitacoes/{solicitacao_id}/avaliacao", user,
-        body.model_dump(mode="json", exclude_none=True),
-        mock_status=201, mock_body=mock_data.avaliacao_criada(solicitacao_id, body.prestadorId, body.nota))
+        payload, mock_status=201, mock_body=mock_data.avaliacao_criada(solicitacao_id, prestador_id, body.nota))
+
+
+@app.get("/solicitacoes")
+async def meus_pedidos(request: Request, status: str | None = None, page: int = 1, size: int = 20,
+                       user: User = Depends(current_user)):
+    """Pedidos do contratante logado (docs/04: `GET /v1/solicitacoes?status=`), mais recentes primeiro."""
+    params = {k: v for k, v in {"status": status, "page": page, "size": size}.items() if v is not None}
+    async with new_client() as client:
+        (res,) = await asyncio.gather(
+            client.get(f"{settings.MS_SOLICITACOES_URL}/v1/solicitacoes", params=params,
+                       headers=upstream_headers(request, user)), return_exceptions=True)
+    data = unwrap(request, res, {"items": []})
+    itens = []
+    for sol in (data or {}).get("items", []):
+        sid = pick(sol, "id")
+        codigo = pick(sol, "status", default="ABERTA")
+        itens.append({
+            "solicitacao_id": sid, "categoria": sol.get("categoria"), "descricao": sol.get("descricao"),
+            "cidade": (sol.get("local") or {}).get("cidade"),
+            "status_codigo": codigo, "status": STATUS_LEGIVEL.get(codigo, codigo), "motivo": sol.get("motivo"),
+            "prestador_id": sol.get("prestadorId"),
+            "_links": {"self": {"href": f"{GW}/solicitacoes/{sid}", "method": "GET"},
+                       "orcamentos": {"href": f"{GW}/solicitacoes/{sid}/orcamentos", "method": "GET"}},
+        })
+    return {"items": itens, "page": page, "size": size, "total": (data or {}).get("total", len(itens))}
 
 
 @app.post("/solicitacoes")

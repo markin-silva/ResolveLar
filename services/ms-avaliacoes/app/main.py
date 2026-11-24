@@ -8,6 +8,7 @@ import logging
 import uuid
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI, Header, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import func
@@ -40,7 +41,8 @@ SEED = [  # (solicitacao, prestador, contratante, nota, comentario)
 
 
 class AvaliacaoIn(BaseModel):
-    prestadorId: str = Field(min_length=3)
+    # No endpoint HTTP o prestador é ignorado e lido da solicitação; o campo só é usado pelo seed.
+    prestadorId: str | None = Field(default=None, min_length=3)
     nota: int = Field(ge=1, le=5)
     comentario: str | None = Field(default=None, max_length=1000)
 
@@ -112,6 +114,29 @@ app = FastAPI(title="ms-avaliacoes", version="1.0.0", lifespan=lifespan)
 install(app)
 
 
+def prestador_da_solicitacao(solicitacao_id: str, user_id: str, role: str | None) -> str:
+    """Barreira própria do serviço (não confia só no BFF): a solicitação precisa ser do usuário e estar
+    confirmada; o prestador avaliado é o da solicitação."""
+    try:
+        r = httpx.get(f"{settings.MS_SOLICITACOES_URL}/v1/solicitacoes/{solicitacao_id}",
+                      headers={"X-User-Id": user_id, "X-User-Role": role or "contratante"},
+                      timeout=settings.HTTP_TIMEOUT_SECONDS)
+    except httpx.RequestError as exc:
+        raise ApiError(503, "Service Unavailable", "Não foi possível validar a solicitação agora.") from exc
+    if r.status_code == 404:
+        raise ApiError(404, "Not Found", f"Solicitação {solicitacao_id} não encontrada.")
+    if r.status_code == 403:
+        raise ApiError(403, "Forbidden", "Esta solicitação pertence a outro contratante.")
+    if not r.is_success:
+        raise ApiError(502, "Bad Gateway", "Resposta inesperada ao validar a solicitação.")
+    sol = r.json()
+    if sol.get("contratanteId") != user_id:
+        raise ApiError(403, "Forbidden", "Esta solicitação pertence a outro contratante.")
+    if sol.get("status") not in ("CONFIRMADA", "CONCLUIDA") or not sol.get("prestadorId"):
+        raise ApiError(409, "Conflict", "Só é possível avaliar um serviço já confirmado.")
+    return sol["prestadorId"]
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "service": settings.SERVICE_NAME}
@@ -129,8 +154,9 @@ def avaliar(solicitacao_id: str, body: AvaliacaoIn, response: Response,
         raise ApiError(401, "Unauthorized", "Identidade ausente (X-User-Id).")
     if x_user_role and x_user_role != "contratante":
         raise ApiError(403, "Forbidden", "Somente o contratante pode avaliar o serviço.")
+    prestador_id = prestador_da_solicitacao(solicitacao_id, x_user_id, x_user_role)
     with Session(write_engine()) as s:
-        a = registrar(s, solicitacao_id, x_user_id, body)
+        a = registrar(s, solicitacao_id, x_user_id, body.model_copy(update={"prestadorId": prestador_id}))
     response.headers["Location"] = f"/v1/avaliacoes/{a.id}"
     return representar(a)
 
