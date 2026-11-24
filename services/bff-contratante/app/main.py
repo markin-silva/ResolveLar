@@ -237,6 +237,8 @@ async def comparar_orcamentos(solicitacao_id: str, request: Request, user: User 
     return {
         **estado_solicitacao(sol, solicitacao_id),
         "titulo": pick(sol, "titulo") or (pick(sol, "descricao", default="") or "")[:60] or solicitacao_id,
+        "categoria": sol.get("categoria"),
+        "descricao": sol.get("descricao"),
         "orcamentos": orcamentos_out,
     }
 
