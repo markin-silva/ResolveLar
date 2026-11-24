@@ -202,7 +202,7 @@ docker compose down -v    # para e APAGA os dados (zera os bancos)
 | `DATABASE_URL não configurada` | Serviço sem variável de ambiente | Confira o `.env` e o bloco `environment` do serviço no compose |
 | `401` mesmo com token | Token expirado (24h) ou segredo diferente | Gere outro: `python3 scripts/generate_jwt.py` |
 | `429` ao testar | Rate limit (10/h criar solicitação, 30/h criar orçamento) | Zere os contadores: `docker compose exec redis redis-cli FLUSHALL` |
-| Editou o `gateway/kong.yml` e nada mudou | O Kong só lê o arquivo ao iniciar | `docker compose restart kong` |
+| Editou o `gateway/kong.tpl.yml` e nada mudou | O Kong só lê o arquivo ao iniciar | `docker compose up -d --force-recreate kong` |
 | Mudou a senha no `.env` e o banco não aceita | Volume já criado com a senha antiga | `docker compose down -v` (apaga os dados) e suba de novo |
 
 ## 8. Estrutura do repositório
@@ -211,7 +211,7 @@ docker compose down -v    # para e APAGA os dados (zera os bancos)
 |---|---|
 | `docker-compose.yml` | Infraestrutura local (Kong, Redis, RabbitMQ, bancos) |
 | `.env.example` | Variáveis de ambiente (copiar para `.env`) |
-| `gateway/kong.yml` | Rotas, JWT/ACL, rate limit e plugins do Kong (modo declarativo) |
+| `gateway/kong.tpl.yml` | Rotas, JWT/ACL, rate limit e plugins do Kong (modo declarativo). É um template: o `kong.yml` é gerado na subida com o `JWT_SECRET` do `.env` |
 | `services/bff-contratante/`, `services/bff-prestador/` | BFFs (FastAPI) |
 | `scripts/` | `generate_jwt.py` (tokens de teste), `demo-frente2.py` (demo da SAGA) |
 | `services/_template-fastapi/` | Base para todos os serviços Python |

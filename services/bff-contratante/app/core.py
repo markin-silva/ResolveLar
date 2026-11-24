@@ -55,19 +55,19 @@ class User:
 
 
 def current_user(
-    x_consumer_username: str | None = Header(None),
     x_user_id: str | None = Header(None),
     x_consumer_groups: str | None = Header(None),
 ) -> User:
-    """Identidade injetada pelo Kong após validar o JWT (X-Consumer-Username / X-Consumer-Groups).
+    """Identidade injetada pelo Kong depois de validar o JWT.
 
-    `X-User-Id` é fallback para testar o BFF direto, sem Kong. O BFF confia nesses
-    headers porque só é acessível pela rede interna.
+    - X-User-Id: o usuário (claim `sub` do token). O Kong sempre sobrescreve o valor enviado pelo cliente.
+    - X-Consumer-Groups: o perfil (`contratante` | `prestador`), do plugin acl.
+
+    O BFF confia nesses headers porque só é acessível pela rede interna (o cliente só chega a ele pelo Kong).
     """
-    user_id = x_consumer_username or x_user_id
-    if not user_id:
-        raise ApiError(401, "Unauthorized", "Identidade ausente: esperado X-Consumer-Username (Kong) ou X-User-Id.")
-    return User(id=user_id, role=x_consumer_groups)
+    if not x_user_id:
+        raise ApiError(401, "Unauthorized", "Identidade ausente: esperado X-User-Id (injetado pelo Kong).")
+    return User(id=x_user_id, role=x_consumer_groups)
 
 
 # --------------------------------------------------------------------------- chamadas internas

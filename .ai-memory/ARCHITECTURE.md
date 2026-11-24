@@ -34,6 +34,7 @@ Redes Docker:
 | `ms-agendamentos` | `8000` | → `db-agendamentos` |
 | `ms-pagamentos` | `8000` | Transactional Outbox + worker `asyncio` publicando no RabbitMQ → `db-pagamentos` |
 | `ms-avaliacoes` | `8000` | Publica `AvaliacaoRegistrada` → `db-avaliacoes` |
+| `ms-auth` | `8000` | Login dos usuários fixos e emissão do JWT; sem banco; só `internal_net`; via Kong em `/v1/auth/*` (pública, 5/min por IP no login) |
 | `ms-triagem` | `8000` | Triagem IA (LangChain + ChromaDB embarcado em `/data/chroma`, volume `chroma_data`) + Redis; sem banco; `internal_net` + `egress_net` |
 | `web-contratante` | host `3001` → Nginx `80` | |
 | `web-prestador` | host `3002` → Nginx `80` | |
@@ -118,7 +119,7 @@ Variáveis padrão de cada serviço Python: `SERVICE_NAME`, `DATABASE_URL`, `RAB
 ```
 .ai-memory/            memória compartilhada (este diretório)
 docs/                  documentação de arquitetura
-gateway/kong.yml       Kong declarativo
+gateway/kong.tpl.yml   Kong declarativo (template; o kong.yml é gerado na subida com JWT_SECRET)
 services/_template-fastapi/   template base dos serviços Python
 docker-compose.yml     infraestrutura base + serviços
 ```
