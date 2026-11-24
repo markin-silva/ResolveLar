@@ -53,3 +53,29 @@ def aprovacao_aceita(orcamento_id: str) -> dict:
         "status": "EM_CONFIRMACAO",
         "_links": {"acompanhar": {"href": "/v1/solicitacoes/sol_8f21", "method": "GET"}},
     }
+
+
+def triagem() -> dict:
+    """Formato de POST /v1/triagem do ms-triagem (ver .ai-memory/DECISIONS_LOG.md)."""
+    return {
+        "triagemId": "tri_mock", "categoria": "eletricista", "urgencia": "MEDIA",
+        "resumo": "Chuveiro elétrico não esquenta e o disjuntor desarma.",
+        "orientacoesSeguranca": ["Desligue o disjuntor do chuveiro antes de mexer no aparelho.",
+                                 "Não troque o disjuntor por um de amperagem maior."],
+        "perguntasComplementares": ["Qual a potência do chuveiro?"],
+        "prestadoresSugeridos": [
+            {"prestadorId": p["prestadorId"], "nome": p["nome"], "categorias": p["categorias"],
+             "cidade": p["cidade"], "notaMedia": p["notaMedia"], "totalAvaliacoes": p["totalAvaliacoes"],
+             "disponivelHoje": p["disponivelHoje"], "precoMedioCentavos": p["precoMedioCentavos"]}
+            for p in PRESTADORES.values()],
+        "fontes": [], "modo": "fallback", "rag": False, "cache": False, "avisos": ["Resposta de exemplo (mock)."],
+        "metricas": {"latenciaMs": 0, "modelo": "mock", "tokensEntrada": 0, "tokensSaida": 0,
+                     "custoEstimadoUsd": 0.0},
+        "_links": {"buscarPrestadores": {"href": "/v1/prestadores?categoria=eletricista", "method": "GET"},
+                   "criarSolicitacao": {"href": "/v1/solicitacoes", "method": "POST"}},
+    }
+
+
+def avaliacao_criada(solicitacao_id: str, prestador_id: str, nota: int) -> dict:
+    return {"id": "aval_mock", "solicitacaoId": solicitacao_id, "prestadorId": prestador_id, "nota": nota,
+            "_links": {"prestador": {"href": f"/v1/prestadores/{prestador_id}", "method": "GET"}}}

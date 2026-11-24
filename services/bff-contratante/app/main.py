@@ -35,6 +35,18 @@ class SolicitacaoIn(BaseModel):
     janelaPreferida: datetime | None = None
 
 
+class TriagemIn(BaseModel):
+    descricao: str = Field(min_length=10, max_length=2000)
+    cidade: str | None = None
+    uf: str | None = Field(default=None, min_length=2, max_length=2)
+
+
+class AvaliacaoIn(BaseModel):
+    prestadorId: str
+    nota: int = Field(ge=1, le=5)
+    comentario: str | None = Field(default=None, max_length=1000)
+
+
 class AprovacaoIn(BaseModel):
     horarioEscolhido: datetime
     meioPagamentoId: str  # token do meio de pagamento, nunca dados de cartão
@@ -67,6 +79,25 @@ async def buscar_prestadores(request: Request, cidade: str | None = None, catego
             return_exceptions=True)
     data = unwrap(request, result, mock_data.prestadores_busca)
     return {"items": [resumo_prestador(p) for p in as_list(data)], "page": page, "size": size}
+
+
+@app.post("/triagem")
+async def triagem(body: TriagemIn, request: Request, user: User = Depends(current_user)):
+    """Assistente de Triagem IA (ms-triagem): categoria, urgência, orientações e prestadores reais."""
+    return await forward_write(
+        request, "POST", f"{settings.MS_TRIAGEM_URL}/v1/triagem", user,
+        body.model_dump(mode="json", exclude_none=True), timeout=settings.TRIAGEM_TIMEOUT_SECONDS,
+        mock_status=200, mock_body=mock_data.triagem())
+
+
+@app.post("/solicitacoes/{solicitacao_id}/avaliacao")
+async def avaliar_servico(solicitacao_id: str, body: AvaliacaoIn, request: Request,
+                          user: User = Depends(current_user)):
+    """Avaliação do serviço (ms-avaliacoes): 201; 409 se a solicitação já foi avaliada."""
+    return await forward_write(
+        request, "POST", f"{settings.MS_AVALIACOES_URL}/v1/solicitacoes/{solicitacao_id}/avaliacao", user,
+        body.model_dump(mode="json", exclude_none=True),
+        mock_status=201, mock_body=mock_data.avaliacao_criada(solicitacao_id, body.prestadorId, body.nota))
 
 
 @app.post("/solicitacoes")

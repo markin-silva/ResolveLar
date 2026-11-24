@@ -71,9 +71,9 @@ def current_user(
 
 
 # --------------------------------------------------------------------------- chamadas internas
-def new_client() -> httpx.AsyncClient:
-    """Todas as chamadas internas usam timeout curto (padrão 3s)."""
-    return httpx.AsyncClient(timeout=get_settings().HTTP_TIMEOUT_SECONDS)
+def new_client(timeout: float | None = None) -> httpx.AsyncClient:
+    """Todas as chamadas internas usam timeout curto (padrão 3s; a triagem IA passa um maior)."""
+    return httpx.AsyncClient(timeout=timeout or get_settings().HTTP_TIMEOUT_SECONDS)
 
 
 def upstream_headers(request: Request, user: User, **extra: str | None) -> dict[str, str]:
@@ -115,12 +115,12 @@ def unwrap(request: Request, result: Any, mock: Any, *, essential: bool = True) 
 
 async def forward_write(
     request: Request, method: str, url: str, user: User, body: dict, *,
-    mock_status: int, mock_body: dict, idempotency_key: str | None = None,
+    mock_status: int, mock_body: dict, idempotency_key: str | None = None, timeout: float | None = None,
 ) -> Response:
     """Repassa um comando (POST) ao microsserviço e devolve status/corpo originais."""
     headers = upstream_headers(request, user, **{"Idempotency-Key": idempotency_key})
     try:
-        async with new_client() as client:
+        async with new_client(timeout) as client:
             resp = await client.request(method, url, json=body, headers=headers)
     except httpx.RequestError as exc:
         if get_settings().ENABLE_UPSTREAM_MOCK:
