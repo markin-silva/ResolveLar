@@ -148,8 +148,20 @@ services:
     volumes:
       - pg_avaliacoes:/var/lib/postgresql/data
 
-  # Microsserviços (ms-*) e frontends (web-*) serão adicionados pelos demais integrantes
-  # a partir de services/_template-fastapi/. Enquanto não existirem, os BFFs usam ENABLE_UPSTREAM_MOCK=true.
+  # ---------- Frontends ----------
+  web-contratante:
+    build: ./clients/web-contratante
+    image: resolvelar/web-contratante:latest
+    restart: unless-stopped
+    ports: ["3000:80"]
+    networks: [edge_net]
+
+  web-prestador:
+    build: ./clients/web-prestador
+    image: resolvelar/web-prestador:latest
+    restart: unless-stopped
+    ports: ["3001:80"]
+    networks: [edge_net]
 
 networks:
   edge_net:
