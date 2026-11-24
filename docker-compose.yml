@@ -17,15 +17,18 @@ services:
     restart: unless-stopped
     environment:
       KONG_DATABASE: "off"
-      KONG_DECLARATIVE_CONFIG: /kong/kong.yml
+      KONG_DECLARATIVE_CONFIG: /tmp/kong.yml
+      # O segredo do JWT vem do ambiente; o kong.yml é gerado a partir do template abaixo.
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no .env}
       KONG_PROXY_LISTEN: 0.0.0.0:8000
       KONG_ADMIN_LISTEN: 0.0.0.0:8001
       KONG_PROXY_ACCESS_LOG: /dev/stdout
       KONG_ADMIN_ACCESS_LOG: /dev/stdout
       KONG_PROXY_ERROR_LOG: /dev/stderr
       KONG_ADMIN_ERROR_LOG: /dev/stderr
+    entrypoint: ["sh", "-c", "sed \"s|__JWT_SECRET__|$$JWT_SECRET|g\" /kong/kong.tpl.yml > /tmp/kong.yml && exec /docker-entrypoint.sh kong docker-start"]
     volumes:
-      - ./gateway/kong.yml:/kong/kong.yml:ro
+      - ./gateway/kong.tpl.yml:/kong/kong.tpl.yml:ro
     ports:
       - "8000:8000"
       - "127.0.0.1:8001:8001"
@@ -36,6 +39,8 @@ services:
       bff-contratante:
         condition: service_healthy
       bff-prestador:
+        condition: service_healthy
+      ms-auth:
         condition: service_healthy
 
   # ---------- BFFs (sem banco próprio; só a rede interna) ----------
@@ -224,6 +229,7 @@ services:
       SERVICE_NAME: ms-avaliacoes
       DATABASE_URL: ${DATABASE_URL_AVALIACOES}
       RABBITMQ_URL: ${RABBITMQ_URL}
+      MS_SOLICITACOES_URL: ${MS_SOLICITACOES_URL}
       SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
     networks: [internal_net]
     depends_on:
@@ -253,19 +259,32 @@ services:
       redis: {condition: service_healthy}
       ms-prestadores: {condition: service_healthy}
 
+  # ---------- Autenticação (usuários fixos de demonstração) ----------
+  # Emite o JWT que o Kong valida. Sem banco: a lista de usuários é fixa e a senha vem do ambiente.
+  ms-auth:
+    build: ./services/ms-auth
+    image: resolvelar/ms-auth:latest
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: ms-auth
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no .env}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:?defina DEMO_PASSWORD no .env}
+      JWT_TTL_HOURS: ${JWT_TTL_HOURS:-12}
+    networks: [internal_net]
+
   # ---------- Frontends ----------
   web-contratante:
     build: ./clients/web-contratante
     image: resolvelar/web-contratante:latest
     restart: unless-stopped
-    ports: ["3000:80"]
+    ports: ["3001:80"]
     networks: [edge_net]
 
   web-prestador:
     build: ./clients/web-prestador
     image: resolvelar/web-prestador:latest
     restart: unless-stopped
-    ports: ["3001:80"]
+    ports: ["3002:80"]
     networks: [edge_net]
 
 networks:

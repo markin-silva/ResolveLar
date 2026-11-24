@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str = ""
     RABBITMQ_URL: str = ""
     EVENTS_EXCHANGE: str = "resolvelar.events"
+    MS_SOLICITACOES_URL: str = "http://ms-solicitacoes:8000"
+    HTTP_TIMEOUT_SECONDS: float = 3.0
     OUTBOX_POLL_SECONDS: float = 1.0
     # Registra algumas avaliações de exemplo (geram AvaliacaoRegistrada -> notaMedia no ms-prestadores)
     SEED_DEMO_DATA: bool = True

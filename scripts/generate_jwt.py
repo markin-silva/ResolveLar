@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Gera JWTs (HS256) de teste para os consumers do Kong definidos em gateway/kong.yml.
+"""Gera JWTs (HS256) de teste para os perfis do Kong definidos em gateway/kong.tpl.yml.
+
+O login normal é pelo ms-auth (POST /v1/auth/login). Este script serve para depurar sem a tela de entrada.
 
 Só usa a biblioteca padrão. Exemplos:
     python3 scripts/generate_jwt.py                 # imprime os dois tokens
     python3 scripts/generate_jwt.py --hours 168     # validade de 7 dias
     TOKEN=$(python3 scripts/generate_jwt.py --only contratante)
 
-O segredo vem de JWT_SECRET (padrão: o segredo de teste do kong.yml). O Kong
+O segredo vem de JWT_SECRET (padrão: o segredo de teste do .env.example). O Kong
 casa o token com a credencial pela claim `iss` (= `key` da credencial).
 """
 import argparse
@@ -17,7 +19,7 @@ import json
 import os
 import time
 
-DEFAULT_SECRET = "resolvelar-jwt-secret-2026"  # igual ao kong.yml (somente teste local)
+DEFAULT_SECRET = "resolvelar-jwt-secret-2026"  # igual ao .env.example (somente teste local)
 
 USERS = {
     "contratante": {"sub": "contratante_15", "iss": "contratante-key"},

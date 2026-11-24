@@ -17,6 +17,8 @@ class Endereco(BaseModel):
     cep: str
     cidade: str
     uf: str = Field(min_length=2, max_length=2)
+    bairro: str | None = None
+    logradouro: str | None = None  # só liberado ao prestador depois da confirmação
 
 
 class SolicitacaoIn(BaseModel):
@@ -85,12 +87,72 @@ def criar(body: SolicitacaoIn, request: Request):
         return {**row.model_dump(), "_links": {"self": link("solicitacoes/" + row.id)}}
 
 
+def resumo(sol, *, publico: bool):
+    """Resumo para listas. `publico=True` é a visão da fila do prestador: sem endereço completo,
+    sem contratante e sem contato (docs/02 libera isso só depois da confirmação)."""
+    local = sol.local or {}
+    out = {"id": sol.id, "categoria": sol.categoria, "descricao": sol.descricao, "status": sol.status,
+           "cidade": local.get("cidade"), "uf": local.get("uf"), "bairro": local.get("bairro"),
+           "_links": {"self": link("solicitacoes/" + sol.id)}}
+    if not publico:
+        out.update({"contratanteId": sol.contratanteId, "prestadorId": sol.prestadorId, "motivo": sol.motivo,
+                    "local": local})
+    return out
+
+
+@app.get("/v1/solicitacoes")
+def listar_solicitacoes(request: Request, status: str | None = None, categoria: str | None = None,
+                        cidade: str | None = None, page: int = 1, size: int = 20):
+    """Contratante: os pedidos dele. Prestador: a fila de demandas abertas (categoria/cidade, visão resumida)
+    e as solicitações em que ele foi escolhido."""
+    user = identity(request)
+    role = request.headers.get("X-User-Role")
+    page, size = max(page, 1), min(max(size, 1), 50)
+    with Session(engine) as session:
+        if role == "contratante":
+            stmt = select(Solicitacao).where(Solicitacao.contratanteId == user)
+            publico = False
+        elif role == "prestador":
+            stmt = select(Solicitacao).where(
+                (Solicitacao.prestadorId == user) | (Solicitacao.status == "AGUARDANDO_ACEITE"))
+            publico = True
+        else:
+            raise HTTPException(403, "Perfil não autorizado")
+        if status:
+            stmt = stmt.where(Solicitacao.status == status.upper())
+        if categoria:
+            stmt = stmt.where(Solicitacao.categoria == categoria.lower())
+        rows = session.exec(stmt.order_by(Solicitacao.id.desc())).all()
+        if cidade:  # a cidade fica dentro do JSON `local`; filtra em memória (volume de MVP)
+            rows = [r for r in rows if (r.local or {}).get("cidade", "").lower() == cidade.lower()]
+        total = len(rows)
+        page_rows = rows[(page - 1) * size: page * size]
+        # prestador escolhido (dono) vê o resumo normal; os demais, a visão pública
+        items = [resumo(r, publico=publico and r.prestadorId != user) for r in page_rows]
+        return {"items": items, "page": page, "size": size, "total": total}
+
+
+@app.get("/v1/orcamentos")
+def listar_orcamentos(request: Request, prestador_id: str, status: str | None = None):
+    """Orçamentos enviados por um prestador (só os dele)."""
+    if identity(request, "prestador") != prestador_id:
+        raise HTTPException(403, "Só é possível consultar os próprios orçamentos")
+    with Session(engine) as session:
+        stmt = select(Orcamento).where(Orcamento.prestadorId == prestador_id)
+        if status:
+            stmt = stmt.where(Orcamento.status == status.upper())
+        rows = session.exec(stmt.order_by(Orcamento.id.desc())).all()
+        return {"items": [view_quote(r) for r in rows]}
+
+
 @app.get("/v1/solicitacoes/{solicitacao_id}")
 def consultar(solicitacao_id: str, request: Request):
     user = identity(request)
     with Session(engine) as session:
         sol = require(session, Solicitacao, solicitacao_id)
         if user not in (sol.contratanteId, sol.prestadorId):
+            if request.headers.get("X-User-Role") == "prestador" and sol.status == "AGUARDANDO_ACEITE":
+                return resumo(sol, publico=True)  # demanda aberta: visão sem endereço/contato
             raise HTTPException(403, "Recurso não pertence ao usuário")
         result = sol.model_dump()
         if sol.sagaId:

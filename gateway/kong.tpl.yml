@@ -1,0 +1,249 @@
+# Kong 3.6 — modo DB-less. Espelha docs/02-gateway-e-bff.md.
+#
+# ESTE É UM TEMPLATE. O kong.yml real é gerado na subida do contêiner (ver docker-compose.yml): o
+# marcador __JWT_SECRET__ é trocado pelo valor da variável de ambiente JWT_SECRET. Assim o segredo do JWT
+# não fica versionado. A imagem do Kong não tem `envsubst`, por isso a troca é feita com `sed`.
+#
+# Identidade: o Kong valida o JWT (plugin `jwt`, casa a credencial pela claim `iss`) e o perfil (plugin `acl`).
+# Há UM consumer por PERFIL (contratante | prestador). O usuário é a claim `sub` do token: um `pre-function`
+# copia o `sub` para o header X-User-Id (sobrescrevendo qualquer valor enviado pelo cliente) e os limites de
+# taxa passam a ser por X-User-Id, não por consumer. Os BFFs leem X-User-Id e X-Consumer-Groups.
+# O token é emitido pelo ms-auth (POST /v1/auth/login).
+_format_version: "3.0"
+_transform: true
+
+consumers:
+  - username: perfil_contratante
+    acls:
+      - group: contratante
+    jwt_secrets:
+      - key: contratante-key
+        secret: "__JWT_SECRET__"
+        algorithm: HS256
+
+  - username: perfil_prestador
+    acls:
+      - group: prestador
+    jwt_secrets:
+      - key: prestador-key
+        secret: "__JWT_SECRET__"
+        algorithm: HS256
+
+services:
+  # ------------------------------------------------------------------ contratante
+  - name: bff-contratante
+    url: http://bff-contratante:8000
+    connect_timeout: 3000
+    read_timeout: 10000
+    write_timeout: 10000
+    plugins:
+      - name: jwt
+        config:
+          key_claim_name: iss
+          claims_to_verify: [exp]
+      # Copia o `sub` do JWT (a assinatura já foi exigida pelo plugin jwt, que responde 401 antes de chegar
+      # ao upstream) para X-User-Id. Sobrescreve qualquer X-User-Id enviado pelo cliente.
+      - name: pre-function
+        config:
+          access:
+            - |
+              local auth = kong.request.get_header("authorization") or ""
+              local token = auth:match("^[Bb]earer%s+(.+)$")
+              kong.service.request.clear_header("X-User-Id")
+              if token then
+                local payload = token:match("^[^.]+%.([^.]+)%.")
+                if payload then
+                  payload = payload:gsub("-", "+"):gsub("_", "/")
+                  payload = payload .. string.rep("=", (4 - #payload % 4) % 4)
+                  local decoded = ngx.decode_base64(payload)
+                  local sub = decoded and decoded:match('"sub"%s*:%s*"([^"]+)"')
+                  if sub then
+                    kong.service.request.set_header("X-User-Id", sub)
+                    kong.ctx.shared.user_id = sub
+                  end
+                end
+              end
+      - name: acl
+        config:
+          allow: [contratante]
+      # Limite padrão (leitura e demais rotas): 120/min por usuário
+      - name: rate-limiting
+        config:
+          minute: 120
+          limit_by: header
+          header_name: X-User-Id
+          policy: redis
+          redis:
+            host: redis
+            port: 6379
+            timeout: 2000
+          fault_tolerant: true
+    routes:
+      # POST /v1/contratante/solicitacoes -> 10/hora (anti-spam aos prestadores).
+      # Rota por regex: não usa strip_path (removeria o caminho todo); o
+      # request-transformer reescreve a URI para /solicitacoes.
+      - name: contratante-criar-solicitacao
+        methods: [POST]
+        paths:
+          - "~/v1/contratante/solicitacoes/?$"
+        strip_path: false
+        plugins:
+          - name: request-transformer
+            config:
+              replace:
+                uri: /solicitacoes
+          - name: rate-limiting
+            config:
+              hour: 10
+              limit_by: header
+              header_name: X-User-Id
+              policy: redis
+              redis:
+                host: redis
+                port: 6379
+                timeout: 2000
+              fault_tolerant: true
+      # Demais rotas: o Kong remove o prefixo (BFF recebe /solicitacoes/sol_8f21)
+      - name: contratante-geral
+        paths:
+          - /v1/contratante
+        strip_path: true
+
+  # ------------------------------------------------------------------ prestador
+  - name: bff-prestador
+    url: http://bff-prestador:8000
+    connect_timeout: 3000
+    read_timeout: 10000
+    write_timeout: 10000
+    plugins:
+      - name: jwt
+        config:
+          key_claim_name: iss
+          claims_to_verify: [exp]
+      # Copia o `sub` do JWT (a assinatura já foi exigida pelo plugin jwt, que responde 401 antes de chegar
+      # ao upstream) para X-User-Id. Sobrescreve qualquer X-User-Id enviado pelo cliente.
+      - name: pre-function
+        config:
+          access:
+            - |
+              local auth = kong.request.get_header("authorization") or ""
+              local token = auth:match("^[Bb]earer%s+(.+)$")
+              kong.service.request.clear_header("X-User-Id")
+              if token then
+                local payload = token:match("^[^.]+%.([^.]+)%.")
+                if payload then
+                  payload = payload:gsub("-", "+"):gsub("_", "/")
+                  payload = payload .. string.rep("=", (4 - #payload % 4) % 4)
+                  local decoded = ngx.decode_base64(payload)
+                  local sub = decoded and decoded:match('"sub"%s*:%s*"([^"]+)"')
+                  if sub then
+                    kong.service.request.set_header("X-User-Id", sub)
+                    kong.ctx.shared.user_id = sub
+                  end
+                end
+              end
+      - name: acl
+        config:
+          allow: [prestador]
+      - name: rate-limiting
+        config:
+          minute: 120
+          limit_by: header
+          header_name: X-User-Id
+          policy: redis
+          redis:
+            host: redis
+            port: 6379
+            timeout: 2000
+          fault_tolerant: true
+    routes:
+      # POST /v1/prestador/solicitacoes/{id}/orcamentos -> 30/hora
+      - name: prestador-enviar-orcamento
+        methods: [POST]
+        paths:
+          - "~/v1/prestador/solicitacoes/(?<solicitacao_id>[^/]+)/orcamentos/?$"
+        strip_path: false
+        plugins:
+          - name: request-transformer
+            config:
+              replace:
+                uri: "/solicitacoes/$(uri_captures.solicitacao_id)/orcamentos"
+          - name: rate-limiting
+            config:
+              hour: 30
+              limit_by: header
+              header_name: X-User-Id
+              policy: redis
+              redis:
+                host: redis
+                port: 6379
+                timeout: 2000
+              fault_tolerant: true
+      - name: prestador-geral
+        paths:
+          - /v1/prestador
+        strip_path: true
+
+  # ------------------------------------------------------------------ auth (pública)
+  # POST /v1/auth/login e GET /v1/auth/usuarios não exigem JWT (é a porta de entrada). Limite de 5/min por IP
+  # contra força bruta (docs/02, seção 2.3).
+  - name: ms-auth
+    url: http://ms-auth:8000
+    connect_timeout: 3000
+    read_timeout: 5000
+    write_timeout: 5000
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 5
+          limit_by: ip
+          policy: redis
+          redis:
+            host: redis
+            port: 6379
+            timeout: 2000
+          fault_tolerant: true
+    routes:
+      - name: auth-login
+        methods: [POST, OPTIONS]
+        paths:
+          - /v1/auth/login
+        strip_path: false
+      # A listagem de usuários de demonstração não precisa do limite de login.
+      - name: auth-usuarios
+        methods: [GET, OPTIONS]
+        paths:
+          - /v1/auth/usuarios
+        strip_path: false
+        plugins:
+          - name: rate-limiting
+            config:
+              minute: 120
+              limit_by: ip
+              policy: redis
+              redis:
+                host: redis
+                port: 6379
+                timeout: 2000
+              fault_tolerant: true
+
+# Plugins globais
+plugins:
+  - name: correlation-id
+    config:
+      header_name: X-Correlation-Id
+      generator: uuid
+      echo_downstream: true
+
+  # O cors responde ao preflight (OPTIONS) antes do jwt, então o navegador
+  # consegue chamar as rotas protegidas a partir dos frontends.
+  - name: cors
+    config:
+      origins:
+        - http://localhost:3001
+        - http://localhost:3002
+      methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+      headers: [Accept, Authorization, Content-Type, Idempotency-Key, X-Correlation-Id]
+      exposed_headers: [X-Correlation-Id, X-Pod-Name, Location, Retry-After, X-RateLimit-Limit-Minute, X-RateLimit-Remaining-Minute, X-RateLimit-Limit-Hour, X-RateLimit-Remaining-Hour]
+      credentials: true
+      max_age: 3600

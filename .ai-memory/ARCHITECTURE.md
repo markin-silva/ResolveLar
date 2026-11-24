@@ -34,6 +34,7 @@ Redes Docker:
 | `ms-agendamentos` | `8000` | → `db-agendamentos` |
 | `ms-pagamentos` | `8000` | Transactional Outbox + worker `asyncio` publicando no RabbitMQ → `db-pagamentos` |
 | `ms-avaliacoes` | `8000` | Publica `AvaliacaoRegistrada` → `db-avaliacoes` |
+| `ms-auth` | `8000` | Login dos usuários fixos e emissão do JWT; sem banco; só `internal_net`; via Kong em `/v1/auth/*` (pública, 5/min por IP no login) |
 | `ms-triagem` | `8000` | Triagem IA (LangChain + ChromaDB embarcado em `/data/chroma`, volume `chroma_data`) + Redis; sem banco; `internal_net` + `egress_net` |
 | `web-contratante` | host `3001` → Nginx `80` | |
 | `web-prestador` | host `3002` → Nginx `80` | |
@@ -111,15 +112,14 @@ HATEOAS: orçamento `PENDENTE` expõe `aprovar`/`recusar`; `APROVADO` e `EXPIRAD
 - Avaliação: `docker compose exec ms-triagem python -m app.avaliacao` (5 perguntas × com/sem RAG; acerto, cobertura de segurança, latência, tokens, custo). Resultado em `docs/05-avaliacao-triagem.md`.
 
 ## 4. Variáveis de ambiente
-Ver `.env.example` (raiz). Nada de credenciais hardcoded: código lê via `os.getenv`/`pydantic-settings`; Compose via `.env`; Kubernetes via `ConfigMap`/`Secret` (`k8s/`).
+Ver `.env.example` (raiz). Nada de credenciais hardcoded: código lê via `os.getenv`/`pydantic-settings`; Compose via `.env`.
 Variáveis padrão de cada serviço Python: `SERVICE_NAME`, `DATABASE_URL`, `RABBITMQ_URL`, `REDIS_URL`.
 
 ## 5. Estrutura do repositório
 ```
 .ai-memory/            memória compartilhada (este diretório)
 docs/                  documentação de arquitetura
-gateway/kong.yml       Kong declarativo
+gateway/kong.tpl.yml   Kong declarativo (template; o kong.yml é gerado na subida com JWT_SECRET)
 services/_template-fastapi/   template base dos serviços Python
-k8s/                   manifests da Parte 3 (Kubernetes saiu do escopo do trabalho; ver DECISIONS_LOG 38)
 docker-compose.yml     infraestrutura base + serviços
 ```
