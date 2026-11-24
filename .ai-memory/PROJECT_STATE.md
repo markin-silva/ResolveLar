@@ -17,10 +17,12 @@ Legenda: `[x]` pronto · `[ ]` pendente. Atualize ao concluir cada item (arquivo
 - [x] K8s: validado em cluster **kind** v1.31 (Pods, Ingress, rotas e demo de escalabilidade). HPA: não feito (opcional)
 
 ## Integrante 2 — SAGA, agendamentos, pagamentos
-- [ ] `ms-solicitacoes` (Orquestrador SAGA + HATEOAS, `POST /v1/orcamentos/{id}/aprovacao` → 202)
-- [ ] `ms-agendamentos` (reserva + `LiberarReserva`)
-- [ ] `ms-pagamentos` (Transactional Outbox + Relay Worker `asyncio` + gatilho de falha)
-- [ ] Dockerfiles + K8s desses serviços
+- [x] `ms-solicitacoes` (Orquestrador SAGA persistido + HATEOAS, `POST /v1/orcamentos/{id}/aprovacao` → 202; idempotência, inbox e retomada com backoff)
+- [x] `ms-agendamentos` (reserva sem sobreposição + confirmação + `LiberarReserva` idempotente)
+- [x] `ms-pagamentos` (Transactional Outbox + Relay Worker `asyncio` com publisher confirms + gatilhos de falha + conciliação/estorno simulado)
+- [x] Dockerfiles + entradas Compose + `k8s/06-ms-{solicitacoes,agendamentos,pagamentos}.yaml`
+- [x] Testes locais em `services/tests-frente2/`: **17 passaram** (Python 3.14, SQLite, HTTP/AMQP simulados; inclui contratos dos YAMLs). Compilação Python verificada. Roteiro `scripts/demo-frente2.py`; guia `docs/05-frente2-execucao.md`
+- [ ] Validar Frente 2 com PostgreSQL/RabbitMQ reais e aplicar seus manifests em cluster (Docker indisponível no ambiente da implementação; testes locais usam SQLite e transportes simulados)
 
 ## Integrante 3 — Prestadores, avaliações, IA
 - [ ] `ms-prestadores` (CQRS Write/Read DBs + consumer RabbitMQ)
@@ -43,6 +45,7 @@ Legenda: `[x]` pronto · `[ ]` pendente. Atualize ao concluir cada item (arquivo
 - [ ] Microsserviços · [ ] SAGA · [ ] CQRS · [ ] RAG/LangChain · [ ] Frontends
 
 ## Endpoints reais implementados
+- Frente 2: solicitações/orçamentos/aceite/recusa/consulta com HATEOAS; reserva/confirmação/liberação e consulta de agendamentos; pagamento/conciliação/estorno/repasses; `/health` e `/ready` nos três. Contratos completos em `docs/05-frente2-execucao.md` e decisões 29–36.
 - Template: `GET /health` (cada serviço derivado herda).
 - `bff-contratante` (via Kong: prefixo `/v1/contratante`): `GET /health`, `GET /prestadores`, `POST /solicitacoes`, `GET /solicitacoes/{id}/orcamentos`, `POST /orcamentos/{id}/aprovacao`
 - `bff-prestador` (via Kong: prefixo `/v1/prestador`): `GET /health`, `GET /tarefas/{id}`, `POST /solicitacoes/{id}/orcamentos`

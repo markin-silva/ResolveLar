@@ -1,0 +1,3 @@
+-r ../ms-solicitacoes/requirements.txt
+pytest
+pyyaml
