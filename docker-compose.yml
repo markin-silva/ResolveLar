@@ -68,6 +68,52 @@ services:
       MS_PRESTADORES_URL: ${MS_PRESTADORES_URL}
     networks: [internal_net]
 
+  # ---------- Frente 2: SAGA e transações ----------
+  ms-solicitacoes:
+    build: ./services/ms-solicitacoes
+    image: resolvelar/ms-solicitacoes:latest
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: ms-solicitacoes
+      DATABASE_URL: ${DATABASE_URL_SOLICITACOES}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+      MS_AGENDAMENTOS_URL: http://ms-agendamentos:8000
+      MS_PAGAMENTOS_URL: http://ms-pagamentos:8000
+      HTTP_TIMEOUT_SECONDS: ${HTTP_TIMEOUT_SECONDS:-3}
+    networks: [internal_net]
+    depends_on:
+      db-solicitacoes:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  ms-agendamentos:
+    build: ./services/ms-agendamentos
+    image: resolvelar/ms-agendamentos:latest
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: ms-agendamentos
+      DATABASE_URL: ${DATABASE_URL_AGENDAMENTOS}
+    networks: [internal_net]
+    depends_on:
+      db-agendamentos:
+        condition: service_healthy
+
+  ms-pagamentos:
+    build: ./services/ms-pagamentos
+    image: resolvelar/ms-pagamentos:latest
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: ms-pagamentos
+      DATABASE_URL: ${DATABASE_URL_PAGAMENTOS}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+    networks: [internal_net]
+    depends_on:
+      db-pagamentos:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
   # ---------- Infra ----------
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -207,8 +253,20 @@ services:
       redis: {condition: service_healthy}
       ms-prestadores: {condition: service_healthy}
 
-  # Demais microsserviços (ms-solicitacoes, ms-agendamentos, ms-pagamentos) e frontends (web-*) são
-  # adicionados pelas outras frentes. Enquanto não existirem, os BFFs usam ENABLE_UPSTREAM_MOCK=true.
+  # ---------- Frontends ----------
+  web-contratante:
+    build: ./clients/web-contratante
+    image: resolvelar/web-contratante:latest
+    restart: unless-stopped
+    ports: ["3000:80"]
+    networks: [edge_net]
+
+  web-prestador:
+    build: ./clients/web-prestador
+    image: resolvelar/web-prestador:latest
+    restart: unless-stopped
+    ports: ["3001:80"]
+    networks: [edge_net]
 
 networks:
   edge_net:

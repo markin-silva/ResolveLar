@@ -13,7 +13,7 @@
 | Cache / rate limit | Redis (`redis:7-alpine`) |
 | API Gateway | Kong 3.6 (`kong:3.6`), modo DB-less |
 | Clientes web | React + Vite, servidos por Nginx (`nginx:alpine`) |
-| Triagem IA | LangChain + ChromaDB embarcado, no serviço próprio `ms-triagem` (ver DECISIONS_LOG 29) |
+| Triagem IA | LangChain + ChromaDB embarcado, no serviço próprio `ms-triagem` (ver DECISIONS_LOG 37) |
 
 Decisão de broker: **RabbitMQ** (o diagrama do doc 01 cita "Redis/RabbitMQ"; vale RabbitMQ para eventos, Redis só para cache e rate limit).
 
@@ -120,6 +120,6 @@ Variáveis padrão de cada serviço Python: `SERVICE_NAME`, `DATABASE_URL`, `RAB
 docs/                  documentação de arquitetura
 gateway/kong.yml       Kong declarativo
 services/_template-fastapi/   template base dos serviços Python
-k8s/                   manifests da Parte 3 (Kubernetes saiu do escopo do trabalho; ver DECISIONS_LOG 30)
+k8s/                   manifests da Parte 3 (Kubernetes saiu do escopo do trabalho; ver DECISIONS_LOG 38)
 docker-compose.yml     infraestrutura base + serviços
 ```
