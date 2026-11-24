@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-solicitacoes
+  namespace: resolvelar
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: ms-solicitacoes}
+  template:
+    metadata:
+      labels: {app: ms-solicitacoes}
+    spec:
+      containers:
+        - name: ms-solicitacoes
+          image: resolvelar/ms-solicitacoes:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef: {name: resolvelar-config}
+          env:
+            - name: SERVICE_NAME
+              value: ms-solicitacoes
+            - name: DB_HOST
+              value: db-solicitacoes
+            - name: DB_NAME
+              value: solicitacoes
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef: {name: resolvelar-secrets, key: POSTGRES_USER}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: resolvelar-secrets, key: POSTGRES_PASSWORD_SOLICITACOES}
+            - name: RABBITMQ_URL
+              valueFrom:
+                secretKeyRef: {name: resolvelar-secrets, key: RABBITMQ_URL}
+          startupProbe:
+            httpGet: {path: /health, port: 8000}
+            failureThreshold: 30
+            periodSeconds: 5
+          readinessProbe:
+            httpGet: {path: /ready, port: 8000}
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: {path: /health, port: 8000}
+            periodSeconds: 15
+            timeoutSeconds: 3
+          resources:
+            requests: {cpu: 50m, memory: 96Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ms-solicitacoes
+  namespace: resolvelar
+spec:
+  type: ClusterIP
+  selector: {app: ms-solicitacoes}
+  ports:
+    - {port: 8000, targetPort: 8000}
