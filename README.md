@@ -119,10 +119,11 @@ Detalhes e contratos: [`.ai-memory/ARCHITECTURE.md`](.ai-memory/ARCHITECTURE.md)
 | Parte | Situação |
 |---|---|
 | Infraestrutura (Kong, Redis, RabbitMQ, 6× PostgreSQL) | Pronta, sobe com `docker compose up` |
-| Kong: JWT + ACL por perfil, rate limit por rota, CORS, correlation-id | Pronto (usuários de teste, ver abaixo) |
-| `bff-contratante` e `bff-prestador` | Prontos. Enquanto os `ms-*` não existem, respondem com **dados de exemplo** (`ENABLE_UPSTREAM_MOCK=true`) |
-| Microsserviços de domínio (`ms-*`) | **Não implementados ainda** |
-| Frontends (React/Vite) | Pendentes |
+| Kong: JWT por perfil, rate limit por usuário, CORS, correlation-id | Pronto |
+| Login com usuários de demonstração (`ms-auth`) | Pronto: 3 contratantes e 11 prestadores, senha única de teste |
+| Microsserviços (`ms-*`): prestadores (CQRS), solicitações (SAGA), agendamentos, pagamentos, avaliações, triagem IA | Prontos |
+| `bff-contratante` e `bff-prestador` | Prontos |
+| Frontends (`web-contratante` :3001, `web-prestador` :3002) | Prontos, com login e fluxos completos |
 
 Acompanhe o andamento em [`.ai-memory/PROJECT_STATE.md`](.ai-memory/PROJECT_STATE.md).
 
@@ -138,41 +139,42 @@ Acompanhe o andamento em [`.ai-memory/PROJECT_STATE.md`](.ai-memory/PROJECT_STAT
 git clone <url-do-repositorio> ResolveLar
 cd ResolveLar
 cp .env.example .env     # cria o arquivo de configuração local
-docker compose up -d
-docker compose ps        # todos devem aparecer "healthy"
+docker compose up -d --build
+docker compose ps        # todos devem aparecer "healthy" (leva ~1 min na primeira vez)
 ```
 
-O `.env` é o arquivo com as senhas locais. Ele **não vai para o Git** (está no `.gitignore`). Os valores de `.env.example` são placeholders: troque as senhas se for usar o projeto fora da sala de aula.
+Abra os dois apps no navegador e entre com um dos usuários de demonstração (ver [`docs/07-passo-a-passo-testes.md`](docs/07-passo-a-passo-testes.md)):
+
+- Contratante: <http://localhost:3001>
+- Profissional: <http://localhost:3002>
+
+Senha de todos os usuários: a `DEMO_PASSWORD` do `.env` (no `.env.example`, `resolvelar123`).
+
+O `.env` é o arquivo com as senhas locais. Ele **não vai para o Git** (está no `.gitignore`). Os valores de `.env.example` são placeholders de teste: troque-os se for usar o projeto fora da sala de aula.
 
 ### Testar que está funcionando
 
-O gateway exige JWT. Gere tokens de teste (usuários `contratante_15` e `prest_17`):
+Entre pela API com um usuário de demonstração (o `ms-auth` emite o token que o Kong valida):
 
 ```bash
-eval "$(python3 scripts/generate_jwt.py | grep export)"    # cria $TOKEN_CONTRATANTE e $TOKEN_PRESTADOR
-```
-
-```bash
-# Gateway
-curl -i http://localhost:8000/nada                                                   # 404
-curl -i http://localhost:8000/v1/contratante/prestadores                             # 401 (sem token)
-curl -s -H "Authorization: Bearer $TOKEN_CONTRATANTE" http://localhost:8000/v1/contratante/prestadores          # 200
-curl -si -H "Authorization: Bearer $TOKEN_CONTRATANTE" http://localhost:8000/v1/prestador/tarefas/sol_8f21 | head -1   # 403 (perfil errado)
-curl -s -H "Authorization: Bearer $TOKEN_PRESTADOR" http://localhost:8000/v1/prestador/tarefas/sol_8f21               # 200 (técnico + financeiro)
-curl -s -H "Authorization: Bearer $TOKEN_CONTRATANTE" http://localhost:8000/v1/contratante/solicitacoes/sol_8f21/orcamentos   # comparação de orçamentos
-curl -s http://127.0.0.1:8001/status                                                 # admin do Kong (200)
+TOKEN=$(curl -s -X POST http://localhost:8000/v1/auth/login -H 'Content-Type: application/json' \
+  -d '{"usuario":"mariana","senha":"resolvelar123"}' | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8000/v1/contratante/solicitacoes   # 200, os pedidos da Mariana
+curl -i http://localhost:8000/v1/contratante/prestadores                                    # 401 (sem token)
+curl -si -H "Authorization: Bearer $TOKEN" http://localhost:8000/v1/prestador/agenda | head -1  # 403 (perfil errado)
 
 # Infraestrutura
 docker compose exec redis redis-cli ping                       # PONG
 docker compose exec rabbitmq rabbitmq-diagnostics -q ping      # Ping succeeded
-docker compose exec db-agendamentos pg_isready -U resolvelar -d agendamentos
 ```
 
-> **Painel do RabbitMQ:** a porta 15672 **não está publicada** no host, então `http://localhost:15672` não abre. Para usá-lo, adicione `"127.0.0.1:15672:15672"` à seção `ports` do serviço `rabbitmq` no `docker-compose.yml`. Enquanto isso, use os comandos `docker compose exec rabbitmq ...`.
+> **Limite de login:** são 5 tentativas por minuto por IP em `POST /v1/auth/login`. Se aparecer "muitas tentativas", espere um minuto.
+
+> **Painel do RabbitMQ:** a porta 15672 **não está publicada** no host. Para usá-lo, adicione `"127.0.0.1:15672:15672"` à seção `ports` do serviço `rabbitmq` no `docker-compose.yml`.
 
 ### Dados de exemplo (mock) nos BFFs
 
-Com `ENABLE_UPSTREAM_MOCK=true` (padrão), se um microsserviço não estiver no ar o BFF devolve payloads de exemplo da `docs/02` e marca a resposta com `X-Mock-Upstream: true`. Um serviço que **responde** nunca é mockado, então cada integrante pode subir o seu `ms-*` (com o hostname de `.ai-memory/ARCHITECTURE.md`, na `internal_net`) e o BFF passa a usá-lo sozinho. Rotas esperadas: `.ai-memory/DECISIONS_LOG.md`, item 20. Com `false`, falhas viram `503` (dado essencial) ou o bloco é omitido (dado opcional).
+Com `ENABLE_UPSTREAM_MOCK=true` (padrão do `.env.example`), se um microsserviço **não estiver no ar** o BFF devolve payloads de exemplo e marca a resposta com `X-Mock-Upstream: true`. Com os serviços rodando, isso não acontece. Para testar falhas de verdade, pare um serviço (`docker compose stop ms-prestadores`) e veja o que a tela mostra. Com `false`, falhas viram `503` (dado essencial) ou o bloco é omitido (dado opcional).
 
 ### Testar um microsserviço (template)
 
@@ -213,7 +215,7 @@ docker compose down -v    # para e APAGA os dados (zera os bancos)
 | `.env.example` | Variáveis de ambiente (copiar para `.env`) |
 | `gateway/kong.tpl.yml` | Rotas, JWT/ACL, rate limit e plugins do Kong (modo declarativo). É um template: o `kong.yml` é gerado na subida com o `JWT_SECRET` do `.env` |
 | `services/bff-contratante/`, `services/bff-prestador/` | BFFs (FastAPI) |
-| `scripts/` | `generate_jwt.py` (tokens de teste), `demo-frente2.py` (demo da SAGA) |
+| `scripts/` | `generate_jwt.py` (tokens de teste, uso avançado), `demo-frente2.py` (demo da SAGA) |
 | `services/_template-fastapi/` | Base para todos os serviços Python |
 | `docs/` | Documentação de arquitetura (seções 1 a 4) |
 | `.ai-memory/` | Memória compartilhada do projeto: arquitetura, estado, decisões |
