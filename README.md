@@ -2,6 +2,10 @@
   <img src="imagens/logotrabalho.png" width="350">
 </p>
 
+<p align="center">
+  🎬 <a href="ResolveLar_Parte4.mp4"><strong>Assista ao vídeo de apresentação — ResolveLar Parte 4</strong></a>
+</p>
+
 ## Equipe
 * Marcus Vinícius Alves Silva
 * Maria Clara Miguel Silva
