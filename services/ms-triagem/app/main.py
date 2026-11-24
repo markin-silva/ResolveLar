@@ -20,8 +20,9 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     def _init():
-        b = BaseConhecimento(settings.CHROMA_PATH)
+        b = BaseConhecimento(settings.CHROMA_PATH, settings.EMBEDDING_THREADS)
         n = b.indexar()
+        b.aquecer()
         logger.info("Base de conhecimento pronta: %s chunks; LLM=%s (%s)", n, settings.provider(), settings.model())
         return b
 
