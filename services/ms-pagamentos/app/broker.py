@@ -3,7 +3,7 @@ import os
 import aio_pika
 
 EXCHANGE = "resolvelar.events"
-QUEUE = "resolvelar.solicitacoes.pagamentos"
+QUEUE = "resolvelar.orquestrador.pagamentos"  # consumida pelo orquestrador-saga
 
 
 async def topology(channel):

@@ -1,16 +1,19 @@
-import hashlib
-import json
-from datetime import datetime, timedelta, timezone
+"""ms-solicitacoes — domínio de pedidos e orçamentos.
 
-from fastapi import Header, HTTPException, Request
+A SAGA de contratação é coordenada de fora pelo orquestrador-saga. Este serviço é um participante como os
+outros: expõe os comandos de domínio que o orquestrador chama (iniciar, confirmar e cancelar a contratação
+de um orçamento), todos idempotentes pelo `sagaId`.
+"""
+from datetime import datetime, timedelta
+
+from fastapi import HTTPException, Request
 from pydantic import AwareDatetime, BaseModel, Field
 from sqlmodel import Session, select
 
 from app.core import create_app, engine, identity, lock, now, require, uid
-from app.models import Orcamento, Saga, Solicitacao
-from app.worker import consume, orchestrate
+from app.models import Orcamento, Solicitacao
 
-app = create_app("ms-solicitacoes", (orchestrate, consume))
+app = create_app("ms-solicitacoes")
 
 
 class Endereco(BaseModel):
@@ -41,9 +44,9 @@ class OrcamentoIn(BaseModel):
     validoAte: AwareDatetime | None = None
 
 
-class AprovacaoIn(BaseModel):
-    horarioEscolhido: AwareDatetime
-    meioPagamentoId: str = Field(min_length=1)
+class ContratacaoIn(BaseModel):
+    sagaId: str = Field(min_length=1)
+    motivo: str | None = None
 
 
 def link(path, method="GET"):
@@ -69,12 +72,6 @@ def view_quote(row):
 def owner(sol, request):
     if identity(request, "contratante") != sol.contratanteId:
         raise HTTPException(403, "Solicitação pertence a outro contratante")
-
-
-def accepted(saga):
-    return {"sagaId": saga.id, "solicitacaoId": saga.solicitacaoId, "orcamentoId": saga.orcamentoId,
-            "status": "EM_CONFIRMACAO", "_links": {
-                "acompanhar": link("solicitacoes/" + saga.solicitacaoId)}}
 
 
 @app.post("/v1/solicitacoes", status_code=201)
@@ -154,12 +151,7 @@ def consultar(solicitacao_id: str, request: Request):
             if request.headers.get("X-User-Role") == "prestador" and sol.status == "AGUARDANDO_ACEITE":
                 return resumo(sol, publico=True)  # demanda aberta: visão sem endereço/contato
             raise HTTPException(403, "Recurso não pertence ao usuário")
-        result = sol.model_dump()
-        if sol.sagaId:
-            saga = require(session, Saga, sol.sagaId)
-            result["saga"] = {"sagaId": saga.id, "status": saga.status, "etapa": saga.etapa,
-                              "reservaId": saga.reservaId, "pagamentoId": saga.pagamentoId,
-                              "motivo": saga.motivo}
+        result = sol.model_dump()  # inclui `sagaId`: o andamento da SAGA é consultado no orquestrador
         result["_links"] = {"self": link("solicitacoes/" + sol.id),
                             "orcamentos": link(f"solicitacoes/{sol.id}/orcamentos")}
         return result
@@ -216,37 +208,68 @@ def recusar(orcamento_id: str, request: Request):
         return view_quote(row)
 
 
-@app.post("/v1/orcamentos/{orcamento_id}/aprovacao", status_code=202)
-def aprovar(orcamento_id: str, body: AprovacaoIn, request: Request,
-            idempotency_key: str = Header(min_length=1, max_length=200)):
-    user = identity(request, "contratante")
-    key = hashlib.sha256(f"{user}:{idempotency_key}".encode()).hexdigest()
-    normalized = body.model_dump(mode="json")
-    normalized["horarioEscolhido"] = body.horarioEscolhido.astimezone(timezone.utc).isoformat()
-    fingerprint = hashlib.sha256(json.dumps([orcamento_id, normalized], sort_keys=True).encode()).hexdigest()
+# ------------------------------------------------------------------ comandos da contratação (SAGA)
+# Chamados só pelo orquestrador-saga, pela rede interna (não há rota no Kong nem nos BFFs).
+# Idempotentes pelo `sagaId`: repetir um comando já aplicado devolve o mesmo resultado.
+
+def contratacao(sol, quote):
+    return {"solicitacaoId": sol.id, "orcamentoId": quote.id, "prestadorId": quote.prestadorId,
+            "valorCentavos": quote.valorCentavos, "duracaoMinutos": quote.duracaoMinutos,
+            "status": sol.status, "sagaId": sol.sagaId}
+
+
+def carregar(session, orcamento_id):
+    quote = require(session, Orcamento, orcamento_id)
+    lock(session, "sol:" + quote.solicitacaoId)
+    session.refresh(quote)
+    return require(session, Solicitacao, quote.solicitacaoId), quote
+
+
+@app.post("/v1/orcamentos/{orcamento_id}/contratacao")
+def iniciar_contratacao(orcamento_id: str, body: ContratacaoIn, request: Request):
+    """Passo 1: valida dono e orçamento e trava a solicitação (EM_CONFIRMACAO) para esta SAGA."""
     with Session(engine) as session, session.begin():
-        lock(session, "idempotency:" + key)
-        previous = session.exec(select(Saga).where(Saga.idempotencyKey == key)).first()
-        if previous:
-            if previous.fingerprint != fingerprint:
-                raise HTTPException(409, "Idempotency-Key reutilizada com outro conteúdo")
-            return accepted(previous)
-        quote = require(session, Orcamento, orcamento_id)
-        lock(session, "sol:" + quote.solicitacaoId)
-        session.refresh(quote)
-        sol = require(session, Solicitacao, quote.solicitacaoId)
+        sol, quote = carregar(session, orcamento_id)
         owner(sol, request)
+        if sol.sagaId == body.sagaId and sol.status == "EM_CONFIRMACAO":
+            return contratacao(sol, quote)  # repetição do mesmo comando
         if (quote.status != "PENDENTE" or datetime.fromisoformat(quote.validoAte) <= now()
                 or sol.status != "AGUARDANDO_ACEITE"):
             raise HTTPException(409, "Orçamento vencido, recusado ou consumido")
-        if body.horarioEscolhido <= now():
-            raise HTTPException(422, "Escolha um horário futuro")
-        saga = Saga(id=uid("saga"), idempotencyKey=key, fingerprint=fingerprint,
-                    solicitacaoId=sol.id, orcamentoId=quote.id, prestadorId=quote.prestadorId,
-                    valorCentavos=quote.valorCentavos, inicio=normalized["horarioEscolhido"],
-                    fim=(body.horarioEscolhido + timedelta(minutes=quote.duracaoMinutos)).isoformat(),
-                    meioPagamentoId=body.meioPagamentoId, correlationId=request.state.correlation_id)
-        sol.status, sol.sagaId, sol.motivo = "EM_CONFIRMACAO", saga.id, None
+        sol.status, sol.sagaId, sol.motivo = "EM_CONFIRMACAO", body.sagaId, None
         quote.status = "EM_CONFIRMACAO"
-        session.add_all([saga, sol, quote])
-        return accepted(saga)
+        session.add_all([sol, quote])
+        return contratacao(sol, quote)
+
+
+@app.post("/v1/orcamentos/{orcamento_id}/contratacao/confirmacao")
+def confirmar_contratacao(orcamento_id: str, body: ContratacaoIn):
+    """Fim do caminho feliz: reserva e pagamento confirmados -> solicitação CONFIRMADA com o prestador."""
+    with Session(engine) as session, session.begin():
+        sol, quote = carregar(session, orcamento_id)
+        if sol.sagaId != body.sagaId:
+            raise HTTPException(409, "Solicitação não está com esta SAGA")
+        if sol.status == "CONFIRMADA":
+            return contratacao(sol, quote)
+        if sol.status != "EM_CONFIRMACAO":
+            raise HTTPException(409, "Solicitação não está em confirmação")
+        sol.status, sol.prestadorId, sol.motivo = "CONFIRMADA", quote.prestadorId, None
+        quote.status = "APROVADO"
+        session.add_all([sol, quote])
+        return contratacao(sol, quote)
+
+
+@app.post("/v1/orcamentos/{orcamento_id}/contratacao/cancelamento")
+def cancelar_contratacao(orcamento_id: str, body: ContratacaoIn):
+    """Compensação: destrava a solicitação (volta a aceitar escolha) e o orçamento (pendente de novo)."""
+    with Session(engine) as session, session.begin():
+        sol, quote = carregar(session, orcamento_id)
+        if sol.sagaId != body.sagaId or sol.status == "AGUARDANDO_ACEITE":
+            return contratacao(sol, quote)  # nada desta SAGA para desfazer (ou já desfeito)
+        if sol.status != "EM_CONFIRMACAO":
+            raise HTTPException(409, "Solicitação já confirmada; não pode ser cancelada pela SAGA")
+        sol.status, sol.prestadorId, sol.motivo = "AGUARDANDO_ACEITE", None, body.motivo
+        if quote.status == "EM_CONFIRMACAO":
+            quote.status = "PENDENTE"
+        session.add_all([sol, quote])
+        return contratacao(sol, quote)

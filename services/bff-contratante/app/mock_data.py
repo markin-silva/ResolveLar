@@ -47,14 +47,6 @@ def solicitacao_criada() -> dict:
     return {"id": "sol_8f21", "status": "ABERTA", "criadaEm": "2026-10-21T15:04:00Z"}
 
 
-def aprovacao_aceita(orcamento_id: str) -> dict:
-    return {
-        "sagaId": "saga_52", "solicitacaoId": "sol_8f21", "orcamentoId": orcamento_id,
-        "status": "EM_CONFIRMACAO",
-        "_links": {"acompanhar": {"href": "/v1/solicitacoes/sol_8f21", "method": "GET"}},
-    }
-
-
 def triagem() -> dict:
     """Formato de POST /v1/triagem do ms-triagem (ver .ai-memory/DECISIONS_LOG.md)."""
     return {
@@ -74,7 +66,6 @@ def triagem() -> dict:
         "_links": {"buscarPrestadores": {"href": "/v1/prestadores?categoria=eletricista", "method": "GET"},
                    "criarSolicitacao": {"href": "/v1/solicitacoes", "method": "POST"}},
     }
-
 
 def avaliacao_criada(solicitacao_id: str, prestador_id: str, nota: int) -> dict:
     return {"id": "aval_mock", "solicitacaoId": solicitacao_id, "prestadorId": prestador_id, "nota": nota,

@@ -26,27 +26,5 @@ class Orcamento(SQLModel, table=True):
     status: str = "PENDENTE"
 
 
-class Saga(SQLModel, table=True):
-    id: str = Field(primary_key=True)
-    idempotencyKey: str = Field(unique=True)
-    fingerprint: str
-    solicitacaoId: str
-    orcamentoId: str
-    prestadorId: str
-    valorCentavos: int
-    inicio: str
-    fim: str
-    meioPagamentoId: str
-    correlationId: str
-    status: str = "EM_ANDAMENTO"
-    etapa: str = "RESERVAR"
-    reservaId: str | None = None
-    pagamentoId: str | None = None
-    resultadoPagamento: str | None = None
-    motivo: str | None = None
-    tentativas: int = 0
-    proximaTentativa: float = Field(default=0, index=True)
-
-
-class Inbox(SQLModel, table=True):
-    eventId: str = Field(primary_key=True)
+# O estado da SAGA de contratação não fica aqui: ele pertence ao orquestrador-saga (banco próprio).
+# Este serviço guarda só o domínio; `Solicitacao.sagaId` indica qual SAGA está com a solicitação travada.

@@ -109,6 +109,72 @@ services:
           - /v1/contratante
         strip_path: true
 
+  # ------------------------------------------------------------------ orquestrador da SAGA
+  # A aprovação do orçamento sai do gateway direto para o orquestrador-saga, que fica FORA dos
+  # microsserviços e coordena ms-solicitacoes, ms-agendamentos e ms-pagamentos. Mesma segurança da rota
+  # do contratante (JWT + X-User-Id pelo `sub` + ACL), e o perfil vai fixo em X-User-Role.
+  - name: orquestrador-saga
+    url: http://orquestrador-saga:8000
+    connect_timeout: 3000
+    read_timeout: 10000
+    write_timeout: 10000
+    plugins:
+      - name: jwt
+        config:
+          key_claim_name: iss
+          claims_to_verify: [exp]
+      - name: pre-function
+        config:
+          access:
+            - |
+              local auth = kong.request.get_header("authorization") or ""
+              local token = auth:match("^[Bb]earer%s+(.+)$")
+              kong.service.request.clear_header("X-User-Id")
+              if token then
+                local payload = token:match("^[^.]+%.([^.]+)%.")
+                if payload then
+                  payload = payload:gsub("-", "+"):gsub("_", "/")
+                  payload = payload .. string.rep("=", (4 - #payload % 4) % 4)
+                  local decoded = ngx.decode_base64(payload)
+                  local sub = decoded and decoded:match('"sub"%s*:%s*"([^"]+)"')
+                  if sub then
+                    kong.service.request.set_header("X-User-Id", sub)
+                    kong.ctx.shared.user_id = sub
+                  end
+                end
+              end
+      - name: acl
+        config:
+          allow: [contratante]
+      - name: rate-limiting
+        config:
+          minute: 120
+          limit_by: header
+          header_name: X-User-Id
+          policy: redis
+          redis:
+            host: redis
+            port: 6379
+            timeout: 2000
+          fault_tolerant: true
+    routes:
+      # POST /v1/contratante/orcamentos/{id}/aprovacao -> orquestrador POST /v1/orcamentos/{id}/aprovacao.
+      # Rota por regex tem prioridade sobre o prefixo /v1/contratante (que vai para o BFF).
+      - name: contratante-aprovar-orcamento
+        methods: [POST]
+        paths:
+          - "~/v1/contratante/orcamentos/(?<orcamento>[^/]+)/aprovacao/?$"
+        strip_path: false
+        plugins:
+          - name: request-transformer
+            config:
+              remove:
+                headers: [X-User-Role]
+              add:
+                headers: ["X-User-Role:contratante"]
+              replace:
+                uri: /v1/orcamentos/$(uri_captures.orcamento)/aprovacao
+
   # ------------------------------------------------------------------ prestador
   - name: bff-prestador
     url: http://bff-prestador:8000

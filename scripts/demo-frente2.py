@@ -1,4 +1,4 @@
-"""Executar dentro da internal_net, por exemplo via docker compose exec (ver guia)."""
+"""Executar dentro da internal_net, no contêiner do orquestrador (ver docs/05-frente2-execucao.md)."""
 import json
 import time
 from datetime import datetime, timedelta, timezone
@@ -9,6 +9,7 @@ import httpx
 SOL = "http://ms-solicitacoes:8000"
 AGENDA = "http://ms-agendamentos:8000"
 PAG = "http://ms-pagamentos:8000"
+ORQ = "http://orquestrador-saga:8000"  # a aprovação (SAGA) vai para o orquestrador, não para o ms
 HEADERS = {"X-User-Id": "contratante_15", "X-User-Role": "contratante"}
 PRO = {"X-User-Id": "prest_17", "X-User-Role": "prestador"}
 
@@ -35,17 +36,18 @@ def run():
             approval_headers = {**headers, "Idempotency-Key": cid}
             body = {"horarioEscolhido": slot.isoformat(), "meioPagamentoId": token}
             path = f"/v1/orcamentos/{quote['id']}/aprovacao"
-            accepted = request("POST", SOL, path, headers=approval_headers, json=body)
-            replay = request("POST", SOL, path, headers=approval_headers, json=body)
+            accepted = request("POST", ORQ, path, headers=approval_headers, json=body)
+            replay = request("POST", ORQ, path, headers=approval_headers, json=body)
             assert accepted["sagaId"] == replay["sagaId"], "Idempotência violada"
             print(json.dumps({"token": token, "aceite": accepted}, ensure_ascii=False), flush=True)
             deadline = time.monotonic() + 90
             while time.monotonic() < deadline:
                 state = request("GET", SOL, f"/v1/solicitacoes/{sid}", headers=headers)
-                if state["saga"]["status"] in ("CONCLUIDA", "COMPENSADA"):
+                saga = request("GET", ORQ, f"/v1/sagas/{accepted['sagaId']}", headers=headers)
+                if saga["status"] in ("CONCLUIDA", "COMPENSADA"):
                     break
                 time.sleep(1)
-            assert state["saga"]["status"] == expected, state
+            assert saga["status"] == expected, saga
             agenda = request("GET", AGENDA, "/v1/agendamentos", params={"solicitacao_id": sid})
             payment = request("GET", PAG, f"/v1/pagamentos/por-saga/{accepted['sagaId']}")
             assert len(agenda["items"]) == (1 if expected == "CONCLUIDA" else 0)

@@ -1,97 +1,99 @@
-"""Etapas duráveis: cada tick confirma uma única transação local."""
+"""Etapas duráveis da SAGA: cada tick avança uma SAGA em uma única transação local.
+
+Caminho feliz:  RESERVAR -> PAGAR -> AGUARDAR_EVENTO -> CONFIRMAR_RESERVA -> CONFIRMAR_SOLICITACAO
+Compensações:   ESTORNAR -> LIBERAR -> CANCELAR_SOLICITACAO      (pagamento recusado, conflito, falha)
+                ABORTAR                                            (falha técnica ao iniciar a contratação)
+"""
 import asyncio
 import json
-import os
 import time
 
 import httpx
 from pydantic import BaseModel, Field, ValidationError
 from sqlmodel import Session, select
 
+from app import participantes as p
 from app.broker import connect, topology
-from app.core import engine, lock, log, repeat, require
-from app.models import Inbox, Orcamento, Saga, Solicitacao
+from app.core import engine, lock, log, repeat
+from app.models import Inbox, Saga
 
-AGENDA = os.getenv("MS_AGENDAMENTOS_URL", "http://ms-agendamentos:8000")
-PAGAMENTOS = os.getenv("MS_PAGAMENTOS_URL", "http://ms-pagamentos:8000")
-TIMEOUT = float(os.getenv("HTTP_TIMEOUT_SECONDS", "3"))
+ESPERA_INICIO_SEGUNDOS = 30  # SAGA presa em INICIAR (o processo caiu no meio da requisição) é abortada
 
 
-def call(client, method, base, path, body=None):
-    response = client.request(method, base + path, json=body)
-    response.raise_for_status()
-    return response.json()
+def compensar(saga, motivo, etapa):
+    saga.motivo = saga.motivo or motivo
+    saga.status, saga.etapa = "COMPENSACAO_PENDENTE", etapa
 
 
-def finish(session, saga, success):
-    lock(session, "sol:" + saga.solicitacaoId)
-    sol = require(session, Solicitacao, saga.solicitacaoId)
-    quote = require(session, Orcamento, saga.orcamentoId)
-    sol.status = "CONFIRMADA" if success else "AGUARDANDO_ACEITE"
-    sol.prestadorId = saga.prestadorId if success else None
-    sol.motivo = saga.motivo
-    quote.status = "APROVADO" if success else "PENDENTE"
-    saga.status = "CONCLUIDA" if success else "COMPENSADA"
-    saga.etapa = "FINALIZADA"
-    session.add_all([sol, quote])
-
-
-def step(session, saga, client):
-    if saga.etapa == "RESERVAR":
+def step(saga, client):
+    if saga.etapa == "INICIAR":
+        # A requisição que criou a SAGA não terminou (queda do processo): desfaz o que possa ter sido feito.
+        compensar(saga, "Contratação interrompida; tente novamente", "ABORTAR")
+    elif saga.etapa == "RESERVAR":
         try:
-            reservation = call(client, "POST", AGENDA, "/v1/reservas", {
+            reservation = p.call(client, "POST", p.AGENDA, "/v1/reservas", {
                 "sagaId": saga.id, "solicitacaoId": saga.solicitacaoId,
                 "prestadorId": saga.prestadorId, "inicio": saga.inicio, "fim": saga.fim})
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code != 409:
                 raise
-            saga.motivo = "Horário indisponível"
-            finish(session, saga, False)
+            compensar(saga, "Horário indisponível", "CANCELAR_SOLICITACAO")  # nada reservado, nada cobrado
             return
         saga.reservaId = reservation["reservaId"]
         saga.etapa = "PAGAR"
     elif saga.etapa == "PAGAR":
-        # Consulta antes de repetir: timeout/crash pode ocorrer depois de uma cobrança efetiva.
-        response = client.get(PAGAMENTOS + f"/v1/pagamentos/por-saga/{saga.id}")
+        # Consulta antes de repetir: timeout/queda pode ocorrer depois de uma cobrança efetiva.
+        response = client.get(p.PAGAMENTOS + f"/v1/pagamentos/por-saga/{saga.id}")
         if response.status_code == 404:
-            payment = call(client, "POST", PAGAMENTOS, "/v1/pagamentos", {
+            payment = p.call(client, "POST", p.PAGAMENTOS, "/v1/pagamentos", {
                 "sagaId": saga.id, "solicitacaoId": saga.solicitacaoId,
                 "valorCentavos": saga.valorCentavos, "meioPagamentoId": saga.meioPagamentoId})
         else:
             response.raise_for_status()
             payment = response.json()
         saga.pagamentoId = payment["pagamentoId"]
-        # Resultado de negócio é aplicado pelo consumidor da outbox.
-        saga.etapa = "AGUARDAR_EVENTO"
+        saga.etapa = "AGUARDAR_EVENTO"  # o resultado chega pelo evento da outbox do ms-pagamentos
     elif saga.etapa == "AGUARDAR_EVENTO":
         if saga.resultadoPagamento == "APROVADO":
-            saga.etapa = "CONFIRMAR"
+            saga.etapa = "CONFIRMAR_RESERVA"
         elif saga.resultadoPagamento == "RECUSADO":
-            saga.status = "COMPENSACAO_PENDENTE"
-            saga.etapa = "LIBERAR"
-    elif saga.etapa == "CONFIRMAR":
+            compensar(saga, "Pagamento não autorizado", "LIBERAR")
+    elif saga.etapa == "CONFIRMAR_RESERVA":
         try:
-            call(client, "POST", AGENDA, f"/v1/reservas/{saga.reservaId}/confirmacao")
+            p.call(client, "POST", p.AGENDA, f"/v1/reservas/{saga.reservaId}/confirmacao")
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code not in (404, 409):
-                raise  # Indisponibilidade transitória: repetir, inclusive confirmação já efetivada.
-            saga.motivo = "Reserva não pôde ser confirmada; estorno necessário"
-            saga.status, saga.etapa = "COMPENSACAO_PENDENTE", "ESTORNAR"
+                raise  # indisponibilidade transitória: repetir (a confirmação é idempotente)
+            compensar(saga, "Reserva não pôde ser confirmada; estorno necessário", "ESTORNAR")
             return
-        finish(session, saga, True)
+        saga.etapa = "CONFIRMAR_SOLICITACAO"
+    elif saga.etapa == "CONFIRMAR_SOLICITACAO":
+        try:
+            p.call(client, "POST", p.SOLICITACOES, f"/v1/orcamentos/{saga.orcamentoId}/contratacao/confirmacao",
+                   {"sagaId": saga.id})
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code not in (404, 409):
+                raise
+            compensar(saga, "Solicitação não pôde ser confirmada; estorno necessário", "ESTORNAR")
+            return
+        saga.status, saga.etapa = "CONCLUIDA", "FINALIZADA"
     elif saga.etapa == "ESTORNAR":
-        payment = call(client, "POST", PAGAMENTOS, f"/v1/pagamentos/{saga.pagamentoId}/estorno")
+        payment = p.call(client, "POST", p.PAGAMENTOS, f"/v1/pagamentos/{saga.pagamentoId}/estorno")
         if payment["status"] not in ("ESTORNADO", "CANCELADO", "RECUSADO"):
             raise RuntimeError("Estorno ainda não confirmado")
         saga.etapa = "LIBERAR"
     elif saga.etapa == "LIBERAR":
         try:
-            call(client, "POST", AGENDA, f"/v1/reservas/{saga.reservaId}/liberacao")
+            p.call(client, "POST", p.AGENDA, f"/v1/reservas/{saga.reservaId}/liberacao")
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code != 404:
-                raise
-            # Reserva comprovadamente inexistente não mantém horário bloqueado.
-        finish(session, saga, False)
+                raise  # reserva comprovadamente inexistente não mantém horário bloqueado
+        saga.etapa = "CANCELAR_SOLICITACAO"
+    elif saga.etapa in ("CANCELAR_SOLICITACAO", "ABORTAR"):
+        p.call(client, "POST", p.SOLICITACOES, f"/v1/orcamentos/{saga.orcamentoId}/contratacao/cancelamento",
+               {"sagaId": saga.id, "motivo": saga.motivo})
+        saga.status = "COMPENSADA" if saga.etapa == "CANCELAR_SOLICITACAO" else "ABORTADA"
+        saga.etapa = "FINALIZADA"
 
 
 def tick():
@@ -104,8 +106,8 @@ def tick():
         if not saga:
             return
         try:
-            with httpx.Client(timeout=TIMEOUT, headers={"X-Correlation-Id": saga.correlationId}) as client:
-                step(session, saga, client)
+            with p.client(saga.correlationId) as client:
+                step(saga, client)
             saga.tentativas = 0
             saga.proximaTentativa = time.time() + (2 if saga.etapa == "AGUARDAR_EVENTO" else 0)
         except (httpx.HTTPError, KeyError, ValueError, RuntimeError):
@@ -177,9 +179,9 @@ async def consume_connection():
                     await message.reject(requeue=False)
                 except Exception:
                     await message.nack(requeue=True)
-                    raise  # Reconexão com espera; não cria loop quente em falha do banco.
+                    raise  # reconexão com espera; não cria loop quente em falha do banco
                 else:
-                    await message.ack()  # Somente depois do commit da inbox e da SAGA.
+                    await message.ack()  # somente depois do commit da inbox e da SAGA
 
 
 async def consume():
