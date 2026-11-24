@@ -22,6 +22,36 @@ STATUS_LEGIVEL = {
 }
 
 
+GW = "/v1/contratante"  # prefixo público (Kong): os links devolvidos ao cliente já apontam para o gateway
+
+
+def estado_solicitacao(sol: dict, solicitacao_id: str) -> dict:
+    """Estado da solicitação para a tela: código técnico (polling da SAGA), texto, motivo e links."""
+    codigo = pick(sol, "status", default="ABERTA")
+    saga = sol.get("saga") or {}
+    return {
+        "solicitacao_id": solicitacao_id,
+        "status_codigo": codigo,
+        "status": STATUS_LEGIVEL.get(codigo, codigo),
+        "motivo": pick(sol, "motivo") or saga.get("motivo"),
+        "saga": {"status": saga.get("status"), "etapa": saga.get("etapa")} if saga else None,
+        "prestador_id": pick(sol, "prestadorId", "prestador_id"),
+        "_links": {"self": {"href": f"{GW}/solicitacoes/{solicitacao_id}", "method": "GET"},
+                   "orcamentos": {"href": f"{GW}/solicitacoes/{solicitacao_id}/orcamentos", "method": "GET"}},
+    }
+
+
+def links_orcamento(orc: dict, orcamento_id: str) -> dict:
+    """Ações permitidas no orçamento, guiadas pelos `_links` do ms-solicitacoes (HATEOAS).
+
+    Sem `_links` no upstream (mock/legado) assume-se orçamento pendente, que pode ser aprovado ou recusado.
+    """
+    upstream = orc.get("_links")
+    rels = ("aprovar", "recusar") if upstream is None else tuple(r for r in ("aprovar", "recusar") if r in upstream)
+    destinos = {"aprovar": f"{GW}/orcamentos/{orcamento_id}/aprovacao", "recusar": f"{GW}/orcamentos/{orcamento_id}/recusa"}
+    return {r: {"href": destinos[r], "method": "POST"} for r in rels}
+
+
 class Endereco(BaseModel):
     cep: str
     cidade: str
@@ -141,9 +171,11 @@ async def comparar_orcamentos(solicitacao_id: str, request: Request, user: User 
         emb = orc.get("prestador") or {}
         valor = orc.get("valor") or {"centavos": 0, "moeda": "BRL"}
         dias = orc.get("prazoEstimadoDias")
+        orcamento_id = pick(orc, "id", "orcamentoId")
         orcamentos_out.append({
-            "orcamento_id": pick(orc, "id", "orcamentoId"),
+            "orcamento_id": orcamento_id,
             "prestador": {
+                "prestador_id": pid,
                 "nome": pick(rep, "nome") or emb.get("nome"),
                 "foto_url": pick(rep, "fotoUrl", "foto_url"),
                 "nota": pick(rep, "notaMedia") if rep else emb.get("notaMedia"),
@@ -152,15 +184,37 @@ async def comparar_orcamentos(solicitacao_id: str, request: Request, user: User 
             "valor": {"centavos": valor["centavos"], "moeda": valor.get("moeda", "BRL")},
             "valor_formatado": brl(valor["centavos"]),
             "prazo": orc.get("prazo") or (f"Em até {dias} dia(s)" if dias else None),
+            "_links": links_orcamento(orc, orcamento_id),
         })
 
-    status = pick(sol, "status", default="ABERTA")
     return {
-        "solicitacao_id": solicitacao_id,
+        **estado_solicitacao(sol, solicitacao_id),
         "titulo": pick(sol, "titulo") or (pick(sol, "descricao", default="") or "")[:60] or solicitacao_id,
-        "status": STATUS_LEGIVEL.get(status, status),
         "orcamentos": orcamentos_out,
     }
+
+
+@app.get("/solicitacoes/{solicitacao_id}")
+async def estado_da_solicitacao(solicitacao_id: str, request: Request, user: User = Depends(current_user)):
+    """Estado atual da solicitação (inclui a SAGA): usado pelo cliente para acompanhar `EM_CONFIRMACAO`."""
+    async with new_client() as client:
+        (result,) = await asyncio.gather(
+            client.get(f"{settings.MS_SOLICITACOES_URL}/v1/solicitacoes/{solicitacao_id}",
+                       headers=upstream_headers(request, user)),
+            return_exceptions=True)
+    sol = unwrap(request, result, lambda: mock_data.solicitacao(solicitacao_id, user.id))
+    dono = pick(sol, "contratanteId", "contratante_id")
+    if dono and dono != user.id:
+        raise ApiError(403, "Forbidden", "Esta solicitação pertence a outro contratante.")
+    return estado_solicitacao(sol, solicitacao_id)
+
+
+@app.post("/orcamentos/{orcamento_id}/recusa")
+async def recusar_orcamento(orcamento_id: str, request: Request, user: User = Depends(current_user)):
+    """Recusa um orçamento pendente (ação do link HATEOAS `recusar`)."""
+    return await forward_write(
+        request, "POST", f"{settings.MS_SOLICITACOES_URL}/v1/orcamentos/{orcamento_id}/recusa", user, {},
+        mock_status=200, mock_body={"id": orcamento_id, "status": "RECUSADO"})
 
 
 @app.post("/orcamentos/{orcamento_id}/aprovacao")

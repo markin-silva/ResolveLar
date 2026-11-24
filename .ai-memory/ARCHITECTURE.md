@@ -111,7 +111,7 @@ HATEOAS: orçamento `PENDENTE` expõe `aprovar`/`recusar`; `APROVADO` e `EXPIRAD
 - Avaliação: `docker compose exec ms-triagem python -m app.avaliacao` (5 perguntas × com/sem RAG; acerto, cobertura de segurança, latência, tokens, custo). Resultado em `docs/05-avaliacao-triagem.md`.
 
 ## 4. Variáveis de ambiente
-Ver `.env.example` (raiz). Nada de credenciais hardcoded: código lê via `os.getenv`/`pydantic-settings`; Compose via `.env`; Kubernetes via `ConfigMap`/`Secret` (`k8s/`).
+Ver `.env.example` (raiz). Nada de credenciais hardcoded: código lê via `os.getenv`/`pydantic-settings`; Compose via `.env`.
 Variáveis padrão de cada serviço Python: `SERVICE_NAME`, `DATABASE_URL`, `RABBITMQ_URL`, `REDIS_URL`.
 
 ## 5. Estrutura do repositório
@@ -120,6 +120,5 @@ Variáveis padrão de cada serviço Python: `SERVICE_NAME`, `DATABASE_URL`, `RAB
 docs/                  documentação de arquitetura
 gateway/kong.yml       Kong declarativo
 services/_template-fastapi/   template base dos serviços Python
-k8s/                   manifests da Parte 3 (Kubernetes saiu do escopo do trabalho; ver DECISIONS_LOG 38)
 docker-compose.yml     infraestrutura base + serviços
 ```

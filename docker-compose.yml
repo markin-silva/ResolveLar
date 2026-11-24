@@ -258,14 +258,14 @@ services:
     build: ./clients/web-contratante
     image: resolvelar/web-contratante:latest
     restart: unless-stopped
-    ports: ["3000:80"]
+    ports: ["3001:80"]
     networks: [edge_net]
 
   web-prestador:
     build: ./clients/web-prestador
     image: resolvelar/web-prestador:latest
     restart: unless-stopped
-    ports: ["3001:80"]
+    ports: ["3002:80"]
     networks: [edge_net]
 
 networks:
