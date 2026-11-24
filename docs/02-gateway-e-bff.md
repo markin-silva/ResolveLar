@@ -23,9 +23,16 @@ graph LR
     BFFP --> MSAg[MS Agendamentos]
     BFFP --> MSPag
     BFFP --> MSPrest
+
+    Kong -->|POST /v1/contratante/orcamentos/*/aprovacao| ORQ[Orquestrador da SAGA]
+    ORQ --> MSSol
+    ORQ --> MSAg
+    ORQ --> MSPag
 ```
 
-> Apenas o Kong é exposto à internet. BFFs e microsserviços ficam numa rede interna e não são acessíveis diretamente pelos clientes.
+> Apenas o Kong é exposto à internet. BFFs, orquestrador e microsserviços ficam numa rede interna e não são acessíveis diretamente pelos clientes.
+>
+> A aprovação de orçamento é a única rota que **não** passa pelo BFF: o Kong a encaminha direto ao orquestrador da SAGA, que coordena os microsserviços (ver [`03-saga-orquestrada.md`](03-saga-orquestrada.md)).
 
 ---
 
