@@ -6,14 +6,52 @@ conteúdo dos .md muda (hash guardado nos metadados da coleção).
 """
 import hashlib
 import logging
+import os
 import re
+import threading
+from functools import cached_property
 from pathlib import Path
 
 import chromadb
 from chromadb.config import Settings as ChromaSettings
 from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+from chromadb.utils.embedding_functions.onnx_mini_lm_l6_v2 import ONNXMiniLM_L6_V2
 
 logger = logging.getLogger("app.rag")
+
+
+class _OnnxPoucasThreads(ONNXMiniLM_L6_V2):
+    """Mesmo modelo do Chroma, com poucas threads: dentro do Docker, junto de ~20 contêineres, o ONNX
+    tentando usar todos os núcleos disputa CPU e fica mais lento, não mais rápido."""
+
+    def __init__(self, threads: int):
+        super().__init__(preferred_providers=["CPUExecutionProvider"])
+        self._threads = threads
+
+    @cached_property
+    def model(self):
+        so = self.ort.SessionOptions()
+        so.log_severity_level = 3
+        so.graph_optimization_level = self.ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        so.intra_op_num_threads = self._threads
+        so.inter_op_num_threads = 1
+        return self.ort.InferenceSession(os.path.join(self.DOWNLOAD_PATH, self.EXTRACTED_FOLDER_NAME, "model.onnx"),
+                                         providers=["CPUExecutionProvider"], sess_options=so)
+
+
+class EmbeddingLocal(DefaultEmbeddingFunction):
+    """Equivale ao embedding "default" do Chroma (mesmo modelo e mesmo nome, então o índice continua
+    compatível), mas reaproveita UMA sessão ONNX. O `DefaultEmbeddingFunction` original cria um modelo novo a
+    cada chamada, ou seja, recarregava os 79 MB do modelo a cada triagem (1 a 3 s em vez de ~0,05 s)."""
+
+    def __init__(self, threads: int = 2):
+        super().__init__()
+        self._onnx = _OnnxPoucasThreads(threads)
+        self._lock = threading.Lock()
+
+    def __call__(self, input):
+        with self._lock:
+            return self._onnx(input)
 
 DIR = Path(__file__).parent / "conhecimento"
 COLECAO = "base_conhecimento"
@@ -36,10 +74,14 @@ def carregar_chunks() -> list[dict]:
 
 
 class BaseConhecimento:
-    def __init__(self, path: str):
+    def __init__(self, path: str, threads: int = 2):
         self.client = chromadb.PersistentClient(path=path, settings=ChromaSettings(anonymized_telemetry=False))
-        self.ef = DefaultEmbeddingFunction()
+        self.ef = EmbeddingLocal(threads)
         self.colecao = None
+
+    def aquecer(self) -> None:
+        """Carrega o modelo e faz uma busca na subida: a primeira triagem não paga o custo de carregar."""
+        self.buscar("aquecimento da base de conhecimento", 1)
 
     def indexar(self) -> int:
         chunks = carregar_chunks()

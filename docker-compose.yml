@@ -42,6 +42,8 @@ services:
         condition: service_healthy
       ms-auth:
         condition: service_healthy
+      orquestrador-saga:
+        condition: service_healthy
 
   # ---------- BFFs (sem banco próprio; só a rede interna) ----------
   bff-contratante:
@@ -50,13 +52,14 @@ services:
     restart: unless-stopped
     environment:
       SERVICE_NAME: bff-contratante
-      ENABLE_UPSTREAM_MOCK: ${ENABLE_UPSTREAM_MOCK:-true}
+      ENABLE_UPSTREAM_MOCK: ${ENABLE_UPSTREAM_MOCK:-false}
       HTTP_TIMEOUT_SECONDS: ${HTTP_TIMEOUT_SECONDS:-3}
       MS_PRESTADORES_URL: ${MS_PRESTADORES_URL}
       MS_SOLICITACOES_URL: ${MS_SOLICITACOES_URL}
       MS_PAGAMENTOS_URL: ${MS_PAGAMENTOS_URL}
       MS_AVALIACOES_URL: ${MS_AVALIACOES_URL}
       MS_TRIAGEM_URL: ${MS_TRIAGEM_URL:-http://ms-triagem:8000}
+      ORQUESTRADOR_URL: ${ORQUESTRADOR_URL:-http://orquestrador-saga:8000}
     networks: [internal_net]
 
   bff-prestador:
@@ -65,7 +68,7 @@ services:
     restart: unless-stopped
     environment:
       SERVICE_NAME: bff-prestador
-      ENABLE_UPSTREAM_MOCK: ${ENABLE_UPSTREAM_MOCK:-true}
+      ENABLE_UPSTREAM_MOCK: ${ENABLE_UPSTREAM_MOCK:-false}
       HTTP_TIMEOUT_SECONDS: ${HTTP_TIMEOUT_SECONDS:-3}
       MS_SOLICITACOES_URL: ${MS_SOLICITACOES_URL}
       MS_AGENDAMENTOS_URL: ${MS_AGENDAMENTOS_URL}
@@ -73,7 +76,29 @@ services:
       MS_PRESTADORES_URL: ${MS_PRESTADORES_URL}
     networks: [internal_net]
 
-  # ---------- Frente 2: SAGA e transações ----------
+  # ---------- Orquestrador da SAGA (fora dos microsserviços; o Kong chama direto) ----------
+  # Coordena a contratação: ms-solicitacoes -> ms-agendamentos -> ms-pagamentos (+ compensações).
+  # Não tem domínio; o banco próprio guarda só o andamento de cada SAGA para retomar após reinício.
+  orquestrador-saga:
+    build: ./services/orquestrador-saga
+    image: resolvelar/orquestrador-saga:latest
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: orquestrador-saga
+      DATABASE_URL: ${DATABASE_URL_ORQUESTRADOR:?defina DATABASE_URL_ORQUESTRADOR no .env}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+      MS_SOLICITACOES_URL: ${MS_SOLICITACOES_URL}
+      MS_AGENDAMENTOS_URL: ${MS_AGENDAMENTOS_URL}
+      MS_PAGAMENTOS_URL: ${MS_PAGAMENTOS_URL}
+      HTTP_TIMEOUT_SECONDS: ${HTTP_TIMEOUT_SECONDS:-3}
+    networks: [internal_net]
+    depends_on:
+      db-orquestrador:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  # ---------- Frente 2: domínio de solicitações, agenda e pagamentos ----------
   ms-solicitacoes:
     build: ./services/ms-solicitacoes
     image: resolvelar/ms-solicitacoes:latest
@@ -81,15 +106,9 @@ services:
     environment:
       SERVICE_NAME: ms-solicitacoes
       DATABASE_URL: ${DATABASE_URL_SOLICITACOES}
-      RABBITMQ_URL: ${RABBITMQ_URL}
-      MS_AGENDAMENTOS_URL: http://ms-agendamentos:8000
-      MS_PAGAMENTOS_URL: http://ms-pagamentos:8000
-      HTTP_TIMEOUT_SECONDS: ${HTTP_TIMEOUT_SECONDS:-3}
     networks: [internal_net]
     depends_on:
       db-solicitacoes:
-        condition: service_healthy
-      rabbitmq:
         condition: service_healthy
 
   ms-agendamentos:
@@ -200,6 +219,15 @@ services:
     volumes:
       - pg_avaliacoes:/var/lib/postgresql/data
 
+  db-orquestrador:
+    <<: *postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_ORQUESTRADOR:?defina POSTGRES_PASSWORD_ORQUESTRADOR no .env}
+      POSTGRES_DB: orquestrador
+    volumes:
+      - pg_orquestrador:/var/lib/postgresql/data
+
   # ---------- Microsserviços (Frente 3: CQRS, avaliações e IA) ----------
   # ms-prestadores: CQRS (comandos -> write DB + outbox; projetor RabbitMQ -> read DB; consultas + Redis)
   ms-prestadores:
@@ -304,5 +332,6 @@ volumes:
   pg_agendamentos:
   pg_pagamentos:
   pg_avaliacoes:
+  pg_orquestrador:
   rabbitmq_data:
   chroma_data:
