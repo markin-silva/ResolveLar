@@ -108,24 +108,6 @@ O esquema é inicializado com `SQLModel.metadata.create_all` em banco vazio;
 alterações futuras de esquema precisarão de migrações. As funções `core.py` são
 copiadas nos três contextos de build; `broker.py`, nos dois participantes AMQP.
 
-## Kubernetes
-
-Construa e carregue no cluster as imagens conforme o procedimento do guia
-`k8s/README.md`:
-
-```sh
-docker build -t resolvelar/ms-solicitacoes:latest services/ms-solicitacoes
-docker build -t resolvelar/ms-agendamentos:latest services/ms-agendamentos
-docker build -t resolvelar/ms-pagamentos:latest services/ms-pagamentos
-kubectl apply -f k8s/
-```
-
-Os arquivos `06-ms-*.yaml` usam o ConfigMap e o Secret existentes, com bancos
-separados, probes, limites de recursos e usuário sem privilégios. Cada serviço
-começa com uma réplica. Credenciais são lidas de Secret; `DB_HOST`, `DB_NAME`,
-`POSTGRES_USER` e `POSTGRES_PASSWORD` montam a URL quando `DATABASE_URL` não existe.
-Os workers são internos ao processo, inclusive o relay de pagamentos.
-
 ## Testes e limites da validação
 
 ```sh
@@ -141,14 +123,14 @@ recusa, limites monetários, idempotência, autorização, sobreposição de hor
 atomicidade da outbox, confirmação de publicação, eventos duplicados, timeout
 após commit, repetição de compensação e estorno antes de liberar.
 
-Resultado local: **17 testes passaram**, incluindo conferência dos contratos de
-Compose/K8s e referências aos Secrets. Compilação Python também passou. O runtime
+Resultado local: **17 testes passaram**, incluindo conferência dos contratos do
+Compose. Compilação Python também passou. O runtime
 local foi Python 3.14; o build Docker mantém Python 3.12 do template. Houve um
 aviso de depreciação do transporte `httpx` no TestClient da versão instalada de
 Starlette, sem falhas nos testes.
 
 Eles **não substituem** a execução da demo com PostgreSQL/RabbitMQ reais nem
-validam os locks concorrentes do PostgreSQL ou o deploy no Kubernetes.
+validam os locks concorrentes do PostgreSQL.
 Docker não estava disponível no ambiente da implementação.
 
 Integração pendente com a Frente 1: o BFF contratante desta base não registra as

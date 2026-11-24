@@ -9,7 +9,7 @@
 # ATENÇÃO: as credenciais JWT abaixo são DE TESTE LOCAL (demo sem provedor de
 # identidade). Em ambiente real, troque por segredos fora do Git.
 #
-# Após editar este arquivo: `scripts/sync-kong-configmap.sh` (regenera k8s/01-kong-config.yaml).
+# Após editar este arquivo: `docker compose restart kong` (o Kong só lê o arquivo ao iniciar).
 _format_version: "3.0"
 _transform: true
 

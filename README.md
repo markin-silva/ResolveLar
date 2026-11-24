@@ -122,7 +122,6 @@ Detalhes e contratos: [`.ai-memory/ARCHITECTURE.md`](.ai-memory/ARCHITECTURE.md)
 | Kong: JWT + ACL por perfil, rate limit por rota, CORS, correlation-id | Pronto (usuários de teste, ver abaixo) |
 | `bff-contratante` e `bff-prestador` | Prontos. Enquanto os `ms-*` não existem, respondem com **dados de exemplo** (`ENABLE_UPSTREAM_MOCK=true`) |
 | Microsserviços de domínio (`ms-*`) | **Não implementados ainda** |
-| Kubernetes (Kong + BFFs + infra, demo de escalabilidade) | Manifestos em [`k8s/`](k8s/); validados com `kubeconform`, **ainda não aplicados em cluster real** |
 | Frontends (React/Vite) | Pendentes |
 
 Acompanhe o andamento em [`.ai-memory/PROJECT_STATE.md`](.ai-memory/PROJECT_STATE.md).
@@ -203,21 +202,8 @@ docker compose down -v    # para e APAGA os dados (zera os bancos)
 | `DATABASE_URL não configurada` | Serviço sem variável de ambiente | Confira o `.env` e o bloco `environment` do serviço no compose |
 | `401` mesmo com token | Token expirado (24h) ou segredo diferente | Gere outro: `python3 scripts/generate_jwt.py` |
 | `429` ao testar | Rate limit (10/h criar solicitação, 30/h criar orçamento) | Zere os contadores: `docker compose exec redis redis-cli FLUSHALL` |
-| Editou o `gateway/kong.yml` e nada mudou | O Kong só lê o arquivo ao iniciar | `docker compose restart kong` (e `./scripts/sync-kong-configmap.sh` para o k8s) |
+| Editou o `gateway/kong.yml` e nada mudou | O Kong só lê o arquivo ao iniciar | `docker compose restart kong` |
 | Mudou a senha no `.env` e o banco não aceita | Volume já criado com a senha antiga | `docker compose down -v` (apaga os dados) e suba de novo |
-
-### Kubernetes (Parte 3)
-
-Guia completo (kind/Minikube, carregar imagens, validar e **demonstração de escalabilidade** com `kubectl scale` + header `X-Pod-Name`): [`k8s/README.md`](k8s/README.md). Resumo:
-
-```bash
-docker build -t resolvelar/bff-contratante:latest services/bff-contratante
-docker build -t resolvelar/bff-prestador:latest   services/bff-prestador
-# carregue as imagens no cluster (ver k8s/README.md) e então:
-kubectl apply -f k8s/
-```
-
-Os manifestos passam no `kubeconform`, mas ainda não foram aplicados em cluster real. O `02-secret.yaml` contém valores de exemplo; em ambiente real, crie os segredos fora do Git.
 
 ## 8. Estrutura do repositório
 
@@ -227,9 +213,8 @@ Os manifestos passam no `kubeconform`, mas ainda não foram aplicados em cluster
 | `.env.example` | Variáveis de ambiente (copiar para `.env`) |
 | `gateway/kong.yml` | Rotas, JWT/ACL, rate limit e plugins do Kong (modo declarativo) |
 | `services/bff-contratante/`, `services/bff-prestador/` | BFFs (FastAPI) |
-| `scripts/` | `generate_jwt.py` (tokens de teste), `sync-kong-configmap.sh` (kong.yml → ConfigMap do k8s) |
+| `scripts/` | `generate_jwt.py` (tokens de teste), `demo-frente2.py` (demo da SAGA) |
 | `services/_template-fastapi/` | Base para todos os serviços Python |
-| `k8s/` | Manifestos Kubernetes + guia (`k8s/README.md`) |
 | `docs/` | Documentação de arquitetura (seções 1 a 4) |
 | `.ai-memory/` | Memória compartilhada do projeto: arquitetura, estado, decisões |
 | `.github/copilot-instructions.md`, `.cursorrules` | Instruções para agentes de IA no VS Code |
@@ -238,7 +223,7 @@ Os manifestos passam no `kubeconform`, mas ainda não foram aplicados em cluster
 
 1. Antes de codar, leia `.ai-memory/ARCHITECTURE.md`, `PROJECT_STATE.md` e `DECISIONS_LOG.md`.
 2. Nomes de hosts, portas, filas e rotas devem seguir o `ARCHITECTURE.md`. Mudança de contrato, endpoint, evento ou variável de ambiente vai para o `DECISIONS_LOG.md`.
-3. Nunca commite credenciais. Use variáveis de ambiente (`.env` local, ConfigMap/Secret no Kubernetes).
+3. Nunca commite credenciais. Use variáveis de ambiente (`.env` local).
 4. Ao concluir uma tarefa, atualize o `PROJECT_STATE.md`.
 5. Commits no padrão [Conventional Commits](https://www.conventionalcommits.org/), em inglês (ex.: `feat(pagamentos): implement transactional outbox relay`).
 

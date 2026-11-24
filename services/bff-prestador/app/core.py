@@ -18,7 +18,7 @@ from app.config import get_settings
 
 logger = logging.getLogger("bff")
 PROBLEM_JSON = "application/problem+json"
-# Em Kubernetes o hostname do contêiner é o nome do Pod: prova o balanceamento de carga.
+# Hostname do contêiner (X-Pod-Name): mostra qual réplica respondeu, útil com `docker compose up --scale`.
 POD_NAME = socket.gethostname()
 
 
