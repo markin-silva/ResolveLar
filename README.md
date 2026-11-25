@@ -3,10 +3,7 @@
 </p>
 
 <p align="center">
-  Plataforma que conecta quem precisa de manutenção residencial a profissionais da região:<br>
-  do pedido ao orçamento, pagamento, agendamento e avaliação.
-=======
-  🎬 <a href="ResolveLar_Parte4.mp4"><strong>Assista ao vídeo de apresentação — ResolveLar Parte 4</strong></a>
+  🎬 <a href="https://drive.google.com/file/d/1SnIOJtxUfM0VqZtyuaxNdM6dCesn9Z0n/view?usp=sharing"><strong>Assista ao vídeo de apresentação — ResolveLar Parte 4</strong></a>
 </p>
 
 ## Equipe
