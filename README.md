@@ -77,11 +77,23 @@ flowchart TB
     KONG --> BFFC
     KONG --> BFFP
     KONG ==>|aprovação de orçamento| ORQ
-    BFFC --> DOM
-    BFFP --> DOM
-    ORQ ==>|comanda solicitações, agendamentos e pagamentos| DOM
+    BFFC --> SOL
+    BFFC --> PAG
+    BFFC --> PREST
+    BFFC --> AVA
+    BFFC --> TRI
+    BFFP --> SOL
+    BFFP --> AGE
+    BFFP --> PAG
+    BFFP --> PREST
+    ORQ ==> SOL
+    ORQ ==> AGE
+    ORQ ==> PAG
+    TRI -->|tool| PREST
     TRI -.->|HTTPS| LLM
 ```
+
+As setas são chamadas HTTP (timeout curto, `X-Correlation-Id` em todas). Além delas, os serviços trocam **eventos pelo RabbitMQ**: `PagamentoAprovado`/`PagamentoRecusado` (do `ms-pagamentos` para o orquestrador) e `AvaliacaoRegistrada` e eventos do prestador (para o banco de leitura do `ms-prestadores`). O Redis guarda o rate limit do Kong e o cache de buscas e triagens. Só o Kong e os dois apps têm porta no computador; o resto fica em rede interna.
 
 As setas são chamadas HTTP (timeout curto, `X-Correlation-Id` em todas). Além delas, os serviços trocam **eventos pelo RabbitMQ**: `PagamentoAprovado`/`PagamentoRecusado` (do `ms-pagamentos` para o orquestrador) e `AvaliacaoRegistrada` e eventos do prestador (para o banco de leitura do `ms-prestadores`). O Redis guarda o rate limit do Kong e o cache de buscas e triagens. Só o Kong e os dois apps têm porta no computador; o resto fica em rede interna.
 
