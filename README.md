@@ -3,7 +3,11 @@
 </p>
 
 <p align="center">
-  🎬 <a href="ResolveLar_Parte4.mp4"><strong>Assista ao vídeo de apresentação — ResolveLar Parte 4</strong></a>
+  <iframe src="https://drive.google.com/file/d/11hW0xVYy9_3EAjMHM11c6_lZMQZ7xauB/preview" width="640" height="360" allow="autoplay; fullscreen" allowfullscreen></iframe>
+</p>
+
+<p align="center">
+  🎬 <a href="https://drive.google.com/file/d/11hW0xVYy9_3EAjMHM11c6_lZMQZ7xauB/view?usp=sharing"><strong>Assista ao vídeo de apresentação — ResolveLar Parte 4</strong></a>
 </p>
 
 ## Equipe
