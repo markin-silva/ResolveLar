@@ -6,10 +6,12 @@ Esta seção detalha o projeto arquitetural da **ResolveLar**, estabelecendo os 
 O domínio da plataforma foi decomposto em 5 microsserviços independentes, focados na coesão do negócio:
 
 1. **MS Prestadores:** Gerencia o perfil dos profissionais, especialidades, áreas de atendimento e a agenda estática.
-2. **MS Solicitações (e Orçamentos):** Controla a criação de pedidos pelos clientes, o envio de propostas pelos prestadores e atua como o **Orquestrador** da principal SAGA do sistema (confirmação do serviço).
+2. **MS Solicitações (e Orçamentos):** Controla a criação de pedidos pelos clientes e o envio de propostas pelos prestadores. Na SAGA de confirmação do serviço é um **participante**: inicia, confirma ou cancela a contratação de um orçamento quando o orquestrador manda.
 3. **MS Agendamentos:** Responsável por bloquear horários na agenda do prestador e garantir que não haja choque de reservas.
 4. **MS Pagamentos:** Processa a autorização do cartão de crédito, captura do valor e liberação do repasse.
 5. **MS Avaliações:** Registra o feedback cruzado (cliente/prestador) ao final do serviço e consolida a nota média.
+
+Fora dos microsserviços de domínio fica o **Orquestrador da SAGA** (`orquestrador-saga`): ele não tem dados de negócio, só coordena a confirmação do serviço entre MS Solicitações, MS Agendamentos e MS Pagamentos. Recebe o aceite direto do gateway e guarda apenas o andamento de cada SAGA em banco próprio (ver [`03-saga-orquestrada.md`](03-saga-orquestrada.md)).
 
 ### Justificativa das Fronteiras (Bounded Contexts)
 A escolha por este corte, em vez de um monólito ou serviços genéricos (como um "MS Usuários"), baseia-se no princípio de responsabilidade única e na mitigação de falhas em cascata. O domínio de Pagamentos, por exemplo, possui regras rígidas de segurança e transação financeira, e não precisa conhecer a especialidade técnica do prestador. Da mesma forma, se o MS Avaliações ficar indisponível, o sistema deve continuar capaz de processar novos orçamentos (MS Solicitações), isolando o impacto.
@@ -27,19 +29,25 @@ graph TD
 
     Gateway --> BFFContratante[BFF Contratante]
     Gateway --> BFFPrestador[BFF Prestador]
+    Gateway -->|aprovação do orçamento| ORQ[Orquestrador da SAGA]
 
     BFFContratante --> MS1[MS Solicitações]
     BFFPrestador --> MS2[MS Agendamentos]
     BFFContratante --> MS3[MS Pagamentos]
     BFFPrestador --> MS4[MS Prestadores]
 
+    ORQ -->|iniciar / confirmar / cancelar contratação| MS1
+    ORQ -->|reservar / confirmar / liberar| MS2
+    ORQ -->|cobrar / estornar| MS3
+    ORQ --- DBO[(PostgreSQL do orquestrador<br/>só estado da SAGA)]
+
     MS1 --- DB1[(PostgreSQL 1)]
     MS2 --- DB2[(PostgreSQL 2)]
     MS3 --- DB3[(PostgreSQL 3)]
     MS4 --- DB4[(PostgreSQL 4)]
     
-    MS3 -.->|Eventos de Pagamento| Broker{{Message Broker - Redis/RabbitMQ}}
-    Broker -.->|Consome Eventos| MS1
+    MS3 -.->|Eventos de Pagamento| Broker{{Message Broker - RabbitMQ}}
+    Broker -.->|Consome Eventos| ORQ
 
 ```
 

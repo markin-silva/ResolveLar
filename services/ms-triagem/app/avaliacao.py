@@ -177,6 +177,7 @@ async def main() -> None:
     s.LLM_TIMEOUT_SECONDS = args.timeout
     s.LLM_TOTAL_BUDGET_SECONDS = args.timeout * (1 + args.retries)
     s.LLM_MAX_RETRIES = args.retries  # só erros transitórios (503/timeout) são repetidos
+    s.TRIAGEM_DEADLINE_SECONDS = s.LLM_TOTAL_BUDGET_SECONDS + 10  # o prazo da triagem não corta o LLM aqui
     triagem.breaker.threshold = 10_000  # o breaker não deve "contaminar" as perguntas seguintes
 
     # índice próprio (mesmos .md): não disputa o diretório do Chroma com o servidor em execução

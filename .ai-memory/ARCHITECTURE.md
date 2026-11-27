@@ -26,11 +26,12 @@ Redes Docker:
 
 | Container | Porta interna | Observações |
 |---|---|---|
-| `kong` | `8000` (proxy, externa), `8001` (admin) | `/v1/contratante/*` → `bff-contratante:8000`; `/v1/prestador/*` → `bff-prestador:8000` (`strip_path: true`) |
+| `kong` | `8000` (proxy, externa), `8001` (admin) | `/v1/contratante/*` → `bff-contratante:8000`; `/v1/prestador/*` → `bff-prestador:8000` (`strip_path: true`); `POST /v1/contratante/orcamentos/{id}/aprovacao` → `orquestrador-saga:8000` (regex + reescrita da URI) |
 | `bff-contratante` | `8000` | |
 | `bff-prestador` | `8000` | |
 | `ms-prestadores` | `8000` | `db-prestadores-write` + `db-prestadores-read` (Postgres desnormalizado, CQRS) |
-| `ms-solicitacoes` | `8000` | Orquestrador da SAGA → `db-solicitacoes` |
+| `orquestrador-saga` | `8000` | Coordena a SAGA de contratação; **fora dos ms de domínio** (sem dados de negócio); chamado direto pelo Kong; consome eventos de pagamento → `db-orquestrador` (só estado da SAGA + inbox) |
+| `ms-solicitacoes` | `8000` | Domínio de pedidos e orçamentos; participante da SAGA (comandos `contratacao`) → `db-solicitacoes` |
 | `ms-agendamentos` | `8000` | → `db-agendamentos` |
 | `ms-pagamentos` | `8000` | Transactional Outbox + worker `asyncio` publicando no RabbitMQ → `db-pagamentos` |
 | `ms-avaliacoes` | `8000` | Publica `AvaliacaoRegistrada` → `db-avaliacoes` |
@@ -40,9 +41,9 @@ Redes Docker:
 | `web-prestador` | host `3002` → Nginx `80` | |
 | `rabbitmq` | `5672` (AMQP), `15672` (management) | |
 | `redis` | `6379` | |
-| `db-*` | `5432` | `db-prestadores-write`, `db-prestadores-read`, `db-solicitacoes`, `db-agendamentos`, `db-pagamentos`, `db-avaliacoes` |
+| `db-*` | `5432` | `db-prestadores-write`, `db-prestadores-read`, `db-solicitacoes`, `db-agendamentos`, `db-pagamentos`, `db-avaliacoes`, `db-orquestrador` |
 
-Volumes nomeados: `pg_prestadores_write`, `pg_prestadores_read`, `pg_solicitacoes`, `pg_agendamentos`, `pg_pagamentos`, `pg_avaliacoes`, `rabbitmq_data`, `chroma_data`.
+Volumes nomeados: `pg_prestadores_write`, `pg_prestadores_read`, `pg_solicitacoes`, `pg_agendamentos`, `pg_pagamentos`, `pg_avaliacoes`, `pg_orquestrador`, `rabbitmq_data`, `chroma_data`.
 
 ## 3. Contratos e regras críticas
 
@@ -53,21 +54,24 @@ Volumes nomeados: `pg_prestadores_write`, `pg_prestadores_read`, `pg_solicitacoe
 - Rastreabilidade: header `X-Correlation-Id` gerado pelo Kong (plugin `correlation-id`) e repassado por todos os serviços.
 - Resiliência: toda chamada HTTP entre serviços com timeout curto (3s). Consumidores RabbitMQ idempotentes (checar `event_id`/`saga_id`).
 
-### SAGA orquestrada (orquestrador: `ms-solicitacoes`)
-`POST /v1/orcamentos/{id}/aprovacao` → **`202 Accepted`**, estado `EM_CONFIRMACAO`.
+### SAGA orquestrada (orquestrador: `orquestrador-saga`, fora dos microsserviços)
+Kong → `orquestrador-saga` `POST /v1/orcamentos/{id}/aprovacao` → **`202 Accepted`**, solicitação `EM_CONFIRMACAO`.
+O orquestrador não tem domínio; o `ms-solicitacoes` é participante como os outros (DECISIONS_LOG 82).
 
-1. Reserva de horário no `ms-agendamentos`.
-2. Cobrança no `ms-pagamentos` (**transação pivô**).
-3. Outbox do `ms-pagamentos` publica `PagamentoAprovado` ou `PagamentoRecusado` no RabbitMQ.
-4. Orquestrador confirma a reserva (aprovado) ou executa a compensação `LiberarReserva` (recusado).
+1. Iniciar a contratação no `ms-solicitacoes` (síncrono: valida dono/orçamento e trava a solicitação).
+2. Reserva de horário no `ms-agendamentos`.
+3. Cobrança no `ms-pagamentos` (**transação pivô**).
+4. Outbox do `ms-pagamentos` publica `PagamentoAprovado` ou `PagamentoRecusado` no RabbitMQ → orquestrador.
+5. Aprovado: confirmar reserva e confirmar contratação no `ms-solicitacoes`. Recusado: `LiberarReserva` e cancelar a contratação.
 
 **Gatilho determinístico de falha (demo):** no `ms-pagamentos`, `meioPagamentoId == "pm_tok_recusado"` **ou** valor `> 500000` centavos força recusa e dispara a compensação.
 
 #### Detalhes da SAGA (docs/03)
-- Entrada: `POST /v1/orcamentos/{id}/aprovacao` (rota do `ms-solicitacoes`; via Kong: `/v1/contratante/orcamentos/{id}/aprovacao` → BFF → ms). Header `Idempotency-Key`. Body: `{"horarioEscolhido": ISO-8601, "meioPagamentoId": "pm_tok_..."}` (token, nunca dados de cartão).
-- Resposta `202`: `{"sagaId","solicitacaoId","orcamentoId","status":"EM_CONFIRMACAO","_links":{"acompanhar":{"href":"/v1/solicitacoes/{id}","method":"GET"}}}`. Orçamento vencido/recusado/já consumido → `409`.
-- Estados — Solicitação: `EM_CONFIRMACAO`, `CONFIRMADA`, `AGUARDANDO_ACEITE`. SAGA: `EM_ANDAMENTO`, `CONCLUIDA`, `COMPENSADA`, `COMPENSACAO_PENDENTE`. Reserva: `RESERVADA`, `CONFIRMADA`, `LIBERADA`. Pagamento: `APROVADO`, `RECUSADO`, `CANCELADO`, `ESTORNADO`.
-- Comandos do orquestrador são HTTP síncronos (timeout 3s) para `ms-agendamentos` (reservar, confirmar, `LiberarReserva(reservaId)`) e `ms-pagamentos` (processar pagamento); o resultado do pagamento volta por evento (Outbox). Estado da SAGA persistido em `db-solicitacoes`; tudo idempotente por `sagaId`.
+- Entrada pública: `POST /v1/contratante/orcamentos/{id}/aprovacao` no Kong → `orquestrador-saga` `POST /v1/orcamentos/{id}/aprovacao` (não passa pelo BFF; Kong põe `X-User-Id` do `sub` e `X-User-Role: contratante`). Header `Idempotency-Key`. Body: `{"horarioEscolhido": ISO-8601, "meioPagamentoId": "pm_tok_..."}` (token, nunca dados de cartão).
+- Resposta `202`: `{"sagaId","solicitacaoId","orcamentoId","status":"EM_CONFIRMACAO","_links":{"acompanhar":{"href":"/v1/contratante/solicitacoes/{id}","method":"GET"}}}`. Dono errado → `403`; orçamento vencido/recusado/já consumido → `409`; horário passado → `422`; `ms-solicitacoes` fora → `503` (SAGA `ABORTADA`).
+- Estados — Solicitação: `EM_CONFIRMACAO`, `CONFIRMADA`, `AGUARDANDO_ACEITE`. SAGA: `EM_ANDAMENTO`, `CONCLUIDA`, `COMPENSADA`, `COMPENSACAO_PENDENTE`, `REJEITADA`, `ABORTADA`. Reserva: `RESERVADA`, `CONFIRMADA`, `LIBERADA`. Pagamento: `APROVADO`, `RECUSADO`, `CANCELADO`, `ESTORNADO`.
+- Etapas (`orquestrador-saga/app/worker.py`): `INICIAR` → `RESERVAR` → `PAGAR` → `AGUARDAR_EVENTO` → `CONFIRMAR_RESERVA` → `CONFIRMAR_SOLICITACAO`; compensações `ESTORNAR` → `LIBERAR` → `CANCELAR_SOLICITACAO`, ou `ABORTAR`.
+- Comandos do orquestrador são HTTP síncronos (timeout 3s): `ms-solicitacoes` (`POST /v1/orcamentos/{id}/contratacao`, `.../confirmacao`, `.../cancelamento`), `ms-agendamentos` (reservar, confirmar, `LiberarReserva(reservaId)`) e `ms-pagamentos` (cobrar, estornar); o resultado do pagamento volta por evento (Outbox). Estado da SAGA persistido em `db-orquestrador`; tudo idempotente por `sagaId`. O BFF lê o andamento em `GET /v1/sagas/{id}`.
 - Timeout no `ms-pagamentos` **não** é recusa: consultar/conciliar pela chave idempotente antes de liberar a reserva.
 
 ### Eventos RabbitMQ
@@ -81,8 +85,8 @@ Consumidor idempotente: ignora `eventId` já processado; projeções ignoram `ve
 
 | Evento | Produtor | Consumidor(es) |
 |---|---|---|
-| `PagamentoAprovado` | `ms-pagamentos` (Outbox) | `ms-solicitacoes` |
-| `PagamentoRecusado` | `ms-pagamentos` (Outbox) | `ms-solicitacoes` |
+| `PagamentoAprovado` | `ms-pagamentos` (Outbox) | `orquestrador-saga` (fila `resolvelar.orquestrador.pagamentos`) |
+| `PagamentoRecusado` | `ms-pagamentos` (Outbox) | `orquestrador-saga` |
 | `AvaliacaoRegistrada` | `ms-avaliacoes` | `ms-prestadores` (`notaMedia`, `totalAvaliacoes` no Read DB) |
 | `PrestadorCadastrado`, `PerfilPrestadorAtualizado`, `AreasAtendimentoAlteradas`, `PrestadorDesativado` | `ms-prestadores` (Outbox) | projetor do Read DB (`ms-prestadores`) |
 | `ServicoConcluido` | `ms-solicitacoes` | `ms-prestadores` (`servicosConcluidos`) |
@@ -105,8 +109,9 @@ HATEOAS: orçamento `PENDENTE` expõe `aprovar`/`recusar`; `APROVADO` e `EXPIRAD
 
 ### Triagem IA (Parte 4, `ms-triagem`)
 - Cadeia LCEL: RAG (ChromaDB) → `prompt | LLM.with_structured_output` → `@tool buscar_prestadores` (HTTP `GET /v1/prestadores` no `ms-prestadores`). A tool é chamada pela cadeia com a categoria classificada: o LLM nunca inventa prestadores.
-- RAG: `services/ms-triagem/app/conhecimento/*.md`, um chunk por seção `##`; embeddings locais (all-MiniLM-L6-v2 ONNX, baixado no build), reindexa quando os .md mudam.
+- RAG: `services/ms-triagem/app/conhecimento/*.md`, um chunk por seção `##`; embeddings locais (all-MiniLM-L6-v2 ONNX, baixado no build com retry), reindexa quando os .md mudam. `EmbeddingLocal` reaproveita UMA sessão ONNX com 2 threads (`EMBEDDING_THREADS`) e é aquecido na subida (DECISIONS_LOG 83).
 - LLM: Gemini (`gemini-3.5-flash-lite`) ou OpenAI (`gpt-4o-mini`) por `LLM_PROVIDER`/chave; sem chave → fallback.
+- Prazo da triagem inteira: `TRIAGEM_DEADLINE_SECONDS=7` (RAG + LLM + tool); o LLM usa o menor entre o seu orçamento e o que sobra do prazo (DECISIONS_LOG 84).
 - Resiliência: timeout por tentativa (4,5s, via `asyncio.wait_for`; não vai na requisição ao Gemini) + retry com backoff só em erro transitório + orçamento total (5s; RAG 0,7–1,4s + tool ~0,2s + cancelamento até ~0,9s ficam fora dele, então a resposta volta em ~7,5s no pior caso, abaixo dos 9s do BFF) + circuit breaker (3 falhas → 30s aberto) + fallback determinístico (regras + trechos do RAG) + cache Redis `triagem:v1:*` (1h, só respostas do LLM). Tool: timeout 2s + 1 retry; falhou → `prestadoresSugeridos: []` + aviso. Redis fora → segue sem cache.
 - API: `POST /v1/triagem?rag=true&cache=true` body `{descricao, cidade?, uf?}` → `{triagemId, categoria, urgencia (EMERGENCIA|ALTA|MEDIA|BAIXA), resumo, orientacoesSeguranca[], perguntasComplementares[], prestadoresSugeridos[], fontes[], modo (llm|fallback), rag, cache, avisos[], metricas{latenciaMs, modelo, tokensEntrada, tokensSaida, custoEstimadoUsd}, _links{buscarPrestadores, criarSolicitacao}}`. Depuração: `GET /v1/triagem/base-conhecimento?q=`. Via Kong: `POST /v1/contratante/triagem`.
 - Avaliação: `docker compose exec ms-triagem python -m app.avaliacao` (5 perguntas × com/sem RAG; acerto, cobertura de segurança, latência, tokens, custo). Resultado em `docs/05-avaliacao-triagem.md`.

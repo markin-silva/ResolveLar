@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     LLM_TIMEOUT_SECONDS: float = 4.5        # por tentativa
     LLM_MAX_RETRIES: int = 1                # tentativas extras (backoff exponencial)
     LLM_TOTAL_BUDGET_SECONDS: float = 5.0   # teto somando as tentativas (o Kong corta em 10s)
+    # Prazo da triagem INTEIRA (RAG + LLM + tool). Cada etapa usa o que sobrou, então a resposta (LLM ou
+    # fallback) sempre volta antes do timeout do BFF (9s) e do Kong (10s). Sem isso o BFF desistia e mostrava
+    # o payload de exemplo (ENABLE_UPSTREAM_MOCK), com categoria errada.
+    TRIAGEM_DEADLINE_SECONDS: float = 7.0
     TOOL_TIMEOUT_SECONDS: float = 2.0
     TOOL_MAX_RETRIES: int = 1
     CIRCUIT_FAILURE_THRESHOLD: int = 3      # falhas seguidas do LLM que abrem o circuito
@@ -44,6 +48,7 @@ class Settings(BaseSettings):
     # --- RAG ---
     CHROMA_PATH: str = "/data/chroma"
     RAG_TOP_K: int = 4
+    EMBEDDING_THREADS: int = 2  # poucas threads: no Docker, mais threads disputam CPU e deixam mais lento
 
     def provider(self) -> str:
         p = self.LLM_PROVIDER.lower()

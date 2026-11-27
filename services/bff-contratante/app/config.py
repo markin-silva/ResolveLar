@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     MS_PAGAMENTOS_URL: str = "http://ms-pagamentos:8000"
     MS_AVALIACOES_URL: str = "http://ms-avaliacoes:8000"
     MS_TRIAGEM_URL: str = "http://ms-triagem:8000"
+    # Só leitura do andamento da SAGA; a aprovação vai do Kong direto para o orquestrador.
+    ORQUESTRADOR_URL: str = "http://orquestrador-saga:8000"
     # A triagem chama um LLM: timeout maior que o padrão (o ms-triagem corta o LLM em ~6s e cai no
     # fallback). Deve ficar abaixo do read_timeout do Kong (10s).
     TRIAGEM_TIMEOUT_SECONDS: float = 9.0

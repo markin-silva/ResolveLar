@@ -44,6 +44,14 @@ def formatar_contexto(x: dict) -> str:
     return "\n\n".join(f"[{d['fonte']} · {d['secao']}]\n{d['texto']}" for d in x["docs"])
 
 
+RESERVA_TOOL_SECONDS = 0.6  # tempo guardado para a tool de prestadores depois do LLM
+
+
+def _restante(x: dict) -> float:
+    """Segundos que faltam para o prazo da triagem inteira (TRIAGEM_DEADLINE_SECONDS)."""
+    return settings.TRIAGEM_DEADLINE_SECONDS - (time.perf_counter() - x["inicio"])
+
+
 PERMANENTES = ("InvalidRequest", "BadRequest", "Authentication", "PermissionDenied", "NotFound")
 
 
@@ -86,13 +94,17 @@ async def classificar(x: dict) -> dict:
     """LLM com resiliência; qualquer falha cai no fallback determinístico (que também usa o RAG)."""
     avisos: list[str] = []
     entrada = {"descricao": x["descricao"], "cidade": x.get("cidade") or "não informada", "contexto": x["contexto"]}
+    # o LLM usa o menor entre o seu orçamento e o que sobrou do prazo da triagem (menos a reserva da tool)
+    orcamento = min(settings.LLM_TOTAL_BUDGET_SECONDS, _restante(x) - RESERVA_TOOL_SECONDS)
     if classificador() is None:
         avisos.append("LLM não configurado (sem chave de API): triagem por regras.")
     elif not breaker.permite():
         avisos.append("LLM temporariamente desativado após falhas seguidas (circuit breaker aberto): triagem por regras.")
+    elif orcamento < 1.0:
+        avisos.append("Sem tempo para consultar o LLM nesta requisição: triagem por regras.")
     else:
         try:
-            resultado, uso = await _com_teto(_invocar_llm(entrada), settings.LLM_TOTAL_BUDGET_SECONDS)
+            resultado, uso = await _com_teto(_invocar_llm(entrada), orcamento)
             breaker.sucesso()
             return {"resultado": resultado, "modo": "llm", "uso": uso, "avisos": avisos}
         except Exception as exc:
@@ -106,7 +118,9 @@ async def classificar(x: dict) -> dict:
 async def sugerir_prestadores(x: dict) -> dict:
     c: Classificacao = x["llm"]["resultado"]
     try:
-        prestadores = await buscar_prestadores.ainvoke({"categoria": c.categoria, "cidade": x.get("cidade")})
+        prestadores = await asyncio.wait_for(
+            buscar_prestadores.ainvoke({"categoria": c.categoria, "cidade": x.get("cidade")}),
+            timeout=max(0.3, _restante(x)))
     except Exception as exc:
         logger.warning("Tool buscar_prestadores falhou: %s", type(exc).__name__)
         prestadores = []
@@ -142,7 +156,8 @@ async def triar(req: TriagemIn, usar_rag: bool = True, usar_cache: bool = True) 
                            "tokensEntrada": 0, "tokensSaida": 0, "custoEstimadoUsd": 0.0}
         return hit
 
-    x = await cadeia.ainvoke({"descricao": req.descricao, "cidade": req.cidade, "usar_rag": usar_rag})
+    x = await cadeia.ainvoke({"descricao": req.descricao, "cidade": req.cidade, "usar_rag": usar_rag,
+                              "inicio": inicio})
     c: Classificacao = x["llm"]["resultado"]
     uso, modo = x["llm"]["uso"], x["llm"]["modo"]
     avisos = x["llm"]["avisos"]

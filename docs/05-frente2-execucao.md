@@ -1,8 +1,10 @@
 # Frente 2 — SAGA, agendamentos e pagamentos
 
-Implementação em `services/ms-solicitacoes`, `services/ms-agendamentos` e
-`services/ms-pagamentos`. Os BFFs, gateway e serviços dos demais integrantes
-não foram alterados. O pagamento é um **simulador**, sem chamada a operadora real.
+Implementação em `services/orquestrador-saga` (coordena a SAGA, fora dos microsserviços),
+`services/ms-solicitacoes`, `services/ms-agendamentos` e
+`services/ms-pagamentos`. Depois da devolutiva da Parte 2, a orquestração saiu do
+`ms-solicitacoes` para o `orquestrador-saga`, que o Kong chama direto (ver `docs/03`).
+O pagamento é um **simulador**, sem chamada a operadora real.
 
 ## Subir e demonstrar
 
@@ -10,23 +12,23 @@ Com Docker e Compose instalados, copie `.env.example` para `.env` se ainda não
 existir e ajuste as configurações. Na raiz do projeto:
 
 ```sh
-docker compose up -d --build ms-solicitacoes ms-agendamentos ms-pagamentos
-docker compose logs -f ms-solicitacoes ms-pagamentos
+docker compose up -d --build orquestrador-saga ms-solicitacoes ms-agendamentos ms-pagamentos
+docker compose logs -f orquestrador-saga ms-pagamentos
 ```
 
-Os bancos e o RabbitMQ sobem como dependências. Nenhum desses três serviços
+Os bancos e o RabbitMQ sobem como dependências. Nenhum desses quatro serviços
 publica porta no host; continuam somente em `internal_net`.
 
 Em outro terminal, execute a demonstração dentro dessa rede:
 
 ```powershell
-Get-Content -Raw scripts/demo-frente2.py | docker compose exec -T ms-solicitacoes python -
+Get-Content -Raw scripts/demo-frente2.py | docker compose exec -T orquestrador-saga python -
 ```
 
 Em Bash:
 
 ```sh
-docker compose exec -T ms-solicitacoes python - < scripts/demo-frente2.py
+docker compose exec -T orquestrador-saga python - < scripts/demo-frente2.py
 ```
 
 O roteiro cria uma solicitação e orçamento reais, aceita com `pm_tok_recusado`,
@@ -49,12 +51,16 @@ serviço dentro da rede interna.
 | Serviço | Endpoint | Função |
 |---|---|---|
 | Solicitações | `POST /v1/solicitacoes` | Cria solicitação do `X-User-Id`, perfil contratante |
-| Solicitações | `GET /v1/solicitacoes/{id}` | Estado consolidado, SAGA e HATEOAS |
+| Solicitações | `GET /v1/solicitacoes/{id}` | Estado da solicitação (com `sagaId`) e HATEOAS |
 | Solicitações | `POST /v1/solicitacoes/{id}/orcamentos` | Orçamento do prestador autenticado |
 | Solicitações | `GET /v1/solicitacoes/{id}/orcamentos` | Lista do contratante |
 | Solicitações | `GET /v1/orcamentos/{id}` | Orçamento e ações permitidas |
 | Solicitações | `POST /v1/orcamentos/{id}/recusa` | Recusa de orçamento |
-| Solicitações | `POST /v1/orcamentos/{id}/aprovacao` | `202`, exige `Idempotency-Key` |
+| Orquestrador | `POST /v1/orcamentos/{id}/aprovacao` | `202`, exige `Idempotency-Key` (via Kong: `POST /v1/contratante/orcamentos/{id}/aprovacao`) |
+| Orquestrador | `GET /v1/sagas/{id}` | Andamento da SAGA (lido pelo BFF) |
+| Solicitações | `POST /v1/orcamentos/{id}/contratacao` | Interno, chamado pelo orquestrador: valida dono e orçamento e trava a solicitação |
+| Solicitações | `POST /v1/orcamentos/{id}/contratacao/confirmacao` | Interno: solicitação `CONFIRMADA` |
+| Solicitações | `POST /v1/orcamentos/{id}/contratacao/cancelamento` | Interno (compensação): volta a `AGUARDANDO_ACEITE` |
 | Agendamentos | `POST /v1/reservas` | Reserva por `sagaId`, com `inicio` e `fim` |
 | Agendamentos | `POST /v1/reservas/{id}/confirmacao` | Confirma reserva |
 | Agendamentos | `POST /v1/reservas/{id}/liberacao` | `LiberarReserva`, idempotente |
@@ -90,7 +96,7 @@ arredondamento para baixo em centavos. Nenhum token é exposto em consulta ou ev
   evitando perder eventos quando o orquestrador ainda não está conectado.
 - Inbox e resultado da SAGA são persistidos juntos antes do ACK. Duplicatas não
   repetem efeitos. Mensagens inválidas vão à DLQ; falha de banco provoca reentrega.
-- Recusa leva a `COMPENSACAO_PENDENTE` e `LIBERAR`. Só após a resposta da agenda
+- Recusa leva a `COMPENSACAO_PENDENTE`, `LIBERAR` e `CANCELAR_SOLICITACAO`. Só após a resposta da agenda e do ms-solicitacoes
   a SAGA vira `COMPENSADA`. Nova tentativa usa outra chave de idempotência.
 - Se uma reserva não puder ser confirmada definitivamente (`404`/`409`), o
   orquestrador estorna primeiro e libera depois. Falhas transitórias são repetidas.
@@ -99,14 +105,14 @@ arredondamento para baixo em centavos. Nenhum token é exposto em consulta ou ev
   exigem intervenção; o estado continua persistido sem anunciar sucesso indevido.
 
 Exchange: `resolvelar.events`, topic durável. Fila:
-`resolvelar.solicitacoes.pagamentos`, vinculada a `PagamentoAprovado` e
+`resolvelar.orquestrador.pagamentos` (consumida pelo `orquestrador-saga`), vinculada a `PagamentoAprovado` e
 `PagamentoRecusado`. DLX: `resolvelar.events.dlx`; DLQ:
-`resolvelar.solicitacoes.pagamentos.dlq`. Mensagens persistentes; envelope conforme
+`resolvelar.orquestrador.pagamentos.dlq`. Mensagens persistentes; envelope conforme
 `ARCHITECTURE.md`. A correlação também segue na propriedade AMQP `correlation_id`.
 
 O esquema é inicializado com `SQLModel.metadata.create_all` em banco vazio;
 alterações futuras de esquema precisarão de migrações. As funções `core.py` são
-copiadas nos três contextos de build; `broker.py`, nos dois participantes AMQP.
+copiadas nos quatro contextos de build; `broker.py`, no `ms-pagamentos` e no `orquestrador-saga`.
 
 ## Testes e limites da validação
 

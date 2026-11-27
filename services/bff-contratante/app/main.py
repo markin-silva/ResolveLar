@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime
 
-from fastapi import Depends, Header, Request
+from fastapi import Depends, Request
 from pydantic import BaseModel, Field
 
 from app import mock_data
@@ -79,11 +79,6 @@ class AvaliacaoIn(BaseModel):
     # O prestador NÃO vem do cliente: o BFF o lê da solicitação (evita avaliar quem não atendeu).
     nota: int = Field(ge=1, le=5)
     comentario: str | None = Field(default=None, max_length=1000)
-
-
-class AprovacaoIn(BaseModel):
-    horarioEscolhido: datetime
-    meioPagamentoId: str  # token do meio de pagamento, nunca dados de cartão
 
 
 def resumo_prestador(p: dict) -> dict:
@@ -255,6 +250,14 @@ async def estado_da_solicitacao(solicitacao_id: str, request: Request, user: Use
     dono = pick(sol, "contratanteId", "contratante_id")
     if dono and dono != user.id:
         raise ApiError(403, "Forbidden", "Esta solicitação pertence a outro contratante.")
+    saga_id = pick(sol, "sagaId", "saga_id")
+    if saga_id and not sol.get("saga"):
+        # O andamento da SAGA é do orquestrador (fora dos ms). Opcional: sem ele, a tela mostra só o status.
+        async with new_client() as client:
+            (saga,) = await asyncio.gather(
+                client.get(f"{settings.ORQUESTRADOR_URL}/v1/sagas/{saga_id}", headers=upstream_headers(request, user)),
+                return_exceptions=True)
+        sol = {**sol, "saga": unwrap(request, saga, None, essential=False)}
     return estado_solicitacao(sol, solicitacao_id)
 
 
@@ -266,12 +269,5 @@ async def recusar_orcamento(orcamento_id: str, request: Request, user: User = De
         mock_status=200, mock_body={"id": orcamento_id, "status": "RECUSADO"})
 
 
-@app.post("/orcamentos/{orcamento_id}/aprovacao")
-async def aprovar_orcamento(orcamento_id: str, body: AprovacaoIn, request: Request,
-                            user: User = Depends(current_user),
-                            idempotency_key: str | None = Header(None)):
-    """Inicia a SAGA no ms-solicitacoes (202 Accepted, status EM_CONFIRMACAO)."""
-    return await forward_write(
-        request, "POST", f"{settings.MS_SOLICITACOES_URL}/v1/orcamentos/{orcamento_id}/aprovacao", user,
-        body.model_dump(mode="json"), idempotency_key=idempotency_key,
-        mock_status=202, mock_body=mock_data.aprovacao_aceita(orcamento_id))
+# POST /v1/contratante/orcamentos/{id}/aprovacao NÃO passa por este BFF: o Kong encaminha direto para o
+# orquestrador-saga, que coordena ms-solicitacoes, ms-agendamentos e ms-pagamentos (gateway/kong.tpl.yml).

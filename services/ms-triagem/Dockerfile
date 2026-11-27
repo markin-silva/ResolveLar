@@ -21,8 +21,13 @@ RUN useradd --create-home --uid 1000 appuser \
 USER appuser
 
 # Baixa o modelo de embeddings (all-MiniLM-L6-v2, ONNX) no build: em runtime o serviço fica na
-# internal_net e o RAG funciona sem internet.
-RUN python -c "from chromadb.utils.embedding_functions import DefaultEmbeddingFunction as E; E()(['aquecimento'])"
+# internal_net e o RAG funciona sem internet. São 79 MB: até 5 tentativas, porque uma queda de conexão no
+# meio do download derrubava o build inteiro.
+RUN for i in 1 2 3 4 5; do \
+      python -c "from chromadb.utils.embedding_functions import DefaultEmbeddingFunction as E; E()(['aquecimento'])" \
+      && exit 0; \
+      echo "download do modelo falhou (tentativa $i), tentando de novo"; rm -rf /home/appuser/.cache/chroma; sleep 5; \
+    done; exit 1
 
 COPY --chown=appuser:appuser app ./app
 
