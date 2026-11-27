@@ -1,5 +1,6 @@
 import { Navigate, NavLink, Outlet, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth.jsx";
+import { Rodape } from "./components.jsx";
 import Agenda from "./pages/Agenda.jsx";
 import Demanda from "./pages/Demanda.jsx";
 import Entrar from "./pages/Entrar.jsx";
@@ -19,7 +20,7 @@ function Painel() {
   return (
     <div className="painel">
       <aside className="lateral">
-        <div className="marca"><span className="marca-icone">R</span><span>resolvelar<small>área do profissional</small></span></div>
+        <div className="marca"><img className="marca-icone" src="/icone.png" alt="" /><span className="marca-nome">Resolve<b>Lar</b><small>área do profissional</small></span></div>
         <nav aria-label="Principal">
           <NavLink to="/" end>Novas solicitações</NavLink>
           <NavLink to="/orcamentos">Meus orçamentos</NavLink>
@@ -32,7 +33,14 @@ function Painel() {
           <button className="botao-link" onClick={() => sair()}>Sair</button>
         </div>
       </aside>
-      <main className="conteudo"><Outlet /></main>
+      <main className="conteudo">
+        <Outlet />
+        <Rodape itens={[
+          ["pin", "Clientes da sua região"],
+          ["escudo", "Pagamento processado pela plataforma"],
+          ["estrela", "Sua reputação cresce a cada serviço"],
+        ]} />
+      </main>
     </div>
   );
 }

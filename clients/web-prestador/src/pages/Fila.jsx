@@ -2,13 +2,13 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
-import { Aviso, Carregando, Vazio } from "../components.jsx";
+import { Aviso, Carregando, Faixa, Vazio } from "../components.jsx";
 import { nomeCategoria } from "../format.js";
 
 // Caixa de entrada: demandas abertas das categorias e da cidade do profissional. O contato e o endereço
 // do cliente não aparecem aqui; só depois da confirmação do serviço.
 export default function Fila() {
-  const { token } = useAuth();
+  const { token, usuario } = useAuth();
   const [dados, setDados] = useState(null);
   const [erro, setErro] = useState("");
 
@@ -20,7 +20,15 @@ export default function Fila() {
 
   return (
     <section>
-      <div className="cabecalho">
+      <Faixa
+        sobretitulo={usuario?.nome ? "Olá, " + usuario.nome.split(" ")[0] : "Olá"}
+        titulo="Quem sabe fazer, trabalha."
+        selos={[["pin", "Pedidos perto de você"], ["calendario", "Agenda organizada"], ["dinheiro", "Pagamento pela plataforma"]]}
+      >
+        Moradores da sua região estão precisando de alguém como você. Responda rápido e saia na frente.
+      </Faixa>
+
+      <div className="cabecalho secao">
         <div>
           <h1>Novas solicitações</h1>
           {dados?.filtros && (

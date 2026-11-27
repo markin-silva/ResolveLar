@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
-import { Aviso, Carregando, Estrelas, Vazio } from "../components.jsx";
+import { Aviso, Carregando, Dica, Estrelas, Icone, Vazio } from "../components.jsx";
 import { CATEGORIAS, nomeCategoria } from "../format.js";
 
 // Consulta informativa dos profissionais (modelo de leitura do CQRS). O pedido é por categoria e cidade;
@@ -24,8 +24,13 @@ export default function Profissionais() {
 
   return (
     <section>
-      <h1>Profissionais</h1>
-      <p className="muted">Veja quem atende a sua região. Para contratar, crie um pedido: os profissionais enviam orçamentos.</p>
+      <div className="cabecalho-pagina">
+        <span className="cabecalho-icone"><Icone nome="usuarios" tamanho={24} /></span>
+        <div>
+          <h1>Profissionais</h1>
+          <p className="muted">Veja quem atende a sua região. Para contratar, crie um pedido: os profissionais enviam orçamentos.</p>
+        </div>
+      </div>
       <div className="linha filtros-linha">
         <label>Categoria
           <select value={categoria} onChange={(e) => setCategoria(e.target.value)}>
@@ -34,6 +39,7 @@ export default function Profissionais() {
         </label>
         <label>Cidade<input value={cidade} onChange={(e) => setCidade(e.target.value)} /></label>
       </div>
+      <Dica icone="estrela">As notas vêm de moradores que já contrataram pela ResolveLar. Confiança construída serviço a serviço.</Dica>
       <Aviso tipo="erro">{erro}</Aviso>
       {lista === null && <Carregando />}
       {lista?.length === 0 && !erro && <Vazio titulo="Nenhum profissional encontrado">Tente outra categoria ou cidade.</Vazio>}

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
-import { Aviso, Carregando, Selo, Vazio } from "../components.jsx";
+import { Aviso, Carregando, Dica, Icone, Selo, Vazio } from "../components.jsx";
 import { dia, hora } from "../format.js";
 
 // Reservas do profissional agrupadas por dia, da mais próxima para a mais distante.
@@ -31,8 +31,14 @@ export default function Agenda() {
 
   return (
     <section>
-      <h1>Agenda</h1>
-      <p className="muted">Seus atendimentos reservados, do mais próximo ao mais distante.</p>
+      <div className="cabecalho-pagina">
+        <span className="cabecalho-icone"><Icone nome="calendario" tamanho={24} /></span>
+        <div>
+          <h1>Agenda</h1>
+          <p className="muted">Seus atendimentos reservados, do mais próximo ao mais distante.</p>
+        </div>
+      </div>
+      <Dica icone="relogio">Pontualidade vira boa avaliação. Se surgir um imprevisto, avise o cliente com antecedência.</Dica>
       <Aviso tipo="erro">{erro}</Aviso>
       {lista === null && <Carregando />}
       {lista?.length === 0 && !erro && <Vazio titulo="Sua agenda está livre">Quando um cliente confirmar um orçamento seu, o horário aparece aqui.</Vazio>}
@@ -45,7 +51,7 @@ export default function Agenda() {
                 <Link className="demanda" to={"/solicitacoes/" + r.solicitacao_id}>
                   <div>
                     <strong>{hora(r.inicio)} – {hora(r.fim)}</strong>
-                    <p className="muted pequeno">{r.solicitacao_id}</p>
+                    <p className="muted pequeno">Ver detalhes do atendimento</p>
                   </div>
                   <Selo status={r.status} />
                 </Link>

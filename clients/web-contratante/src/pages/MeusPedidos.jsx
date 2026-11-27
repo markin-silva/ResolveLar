@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
-import { Aviso, Carregando, Selo, Vazio } from "../components.jsx";
+import { Aviso, Carregando, Faixa, Selo, Vazio } from "../components.jsx";
 import { nomeCategoria } from "../format.js";
 
 const FILTROS = [
@@ -12,7 +12,7 @@ const FILTROS = [
 ];
 
 export default function MeusPedidos() {
-  const { token } = useAuth();
+  const { token, usuario } = useAuth();
   const [filtro, setFiltro] = useState("");
   const [pedidos, setPedidos] = useState(null);
   const [erro, setErro] = useState("");
@@ -28,9 +28,17 @@ export default function MeusPedidos() {
 
   return (
     <section>
-      <div className="cabecalho">
+      <Faixa
+        sobretitulo={usuario?.nome ? "Olá, " + usuario.nome.split(" ")[0] : "Olá"}
+        titulo="Do que a sua casa precisa hoje?"
+        selos={[["chave", "Profissionais da sua região"], ["dinheiro", "Compare orçamentos"], ["escudo", "Pague com segurança"]]}
+        acao={<Link className="botao" to="/novo">Novo pedido</Link>}
+      >
+        Conte o problema em poucas palavras e receba propostas de quem entende do assunto.
+      </Faixa>
+
+      <div className="cabecalho secao">
         <div><h1>Meus pedidos</h1><p className="muted">Acompanhe cada pedido e escolha o melhor orçamento.</p></div>
-        <Link className="botao" to="/novo">Novo pedido</Link>
       </div>
 
       <div className="filtros" role="group" aria-label="Filtrar pedidos">

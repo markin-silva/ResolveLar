@@ -34,8 +34,20 @@ export default function Entrar() {
 
   return (
     <div className="entrada">
+      <div className="entrada-grade">
+      <aside className="entrada-vitrine">
+        <h2>Quem sabe fazer, <em>trabalha</em>.</h2>
+        <p>Receba pedidos da sua região, envie orçamentos e organize sua agenda e seus ganhos em um só lugar.</p>
+        <ul>
+          <li>Novos clientes perto de você</li>
+          <li>Agenda organizada automaticamente</li>
+          <li>Pagamento garantido pela plataforma</li>
+        </ul>
+        <img className="entrada-ilustracao" src="/boas-vindas.png" alt="" />
+      </aside>
       <form className="cartao entrada-cartao" onSubmit={enviar}>
-        <p className="sobretitulo">ResolveLar · Profissional</p>
+        <img className="entrada-logo" src="/logo.png" alt="ResolveLar" />
+        <p className="sobretitulo">Área do profissional</p>
         <h1>Entrar</h1>
         <p className="muted">Escolha o usuário de demonstração e informe a senha de teste.</p>
 
@@ -63,6 +75,7 @@ export default function Entrar() {
         <Aviso tipo="erro">{erro}</Aviso>
         <Aviso tipo="info">{aviso}</Aviso>
       </form>
+      </div>
     </div>
   );
 }

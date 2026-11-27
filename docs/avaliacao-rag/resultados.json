@@ -1,0 +1,916 @@
+{
+ "perguntas": [
+  {
+   "descricao": "Meu chuveiro elétrico parou de esquentar e quando ligo no modo inverno o disjuntor desarma.",
+   "categoria": "eletricista",
+   "urgencias": [
+    "MEDIA",
+    "ALTA"
+   ],
+   "seguranca": [
+    [
+     "disjuntor"
+    ],
+    [
+     "amperagem",
+     "maior"
+    ],
+    [
+     "fiacao",
+     "fio",
+     "queimad"
+    ],
+    [
+     "molhad",
+     "seca"
+    ]
+   ]
+  },
+  {
+   "descricao": "Estou sentindo um cheiro forte de gás na cozinha desde que acordei.",
+   "categoria": "tecnico-gas",
+   "urgencias": [
+    "EMERGENCIA"
+   ],
+   "seguranca": [
+    [
+     "interruptor"
+    ],
+    [
+     "registro"
+    ],
+    [
+     "janela",
+     "ventil"
+    ],
+    [
+     "193",
+     "bombeiro"
+    ],
+    [
+     "fosforo",
+     "isqueiro",
+     "chama",
+     "acend"
+    ]
+   ]
+  },
+  {
+   "descricao": "Apareceu uma mancha de umidade no teto do banheiro que aumenta depois do banho e começou a pingar.",
+   "categoria": "encanador",
+   "urgencias": [
+    "MEDIA",
+    "ALTA"
+   ],
+   "seguranca": [
+    [
+     "registro"
+    ],
+    [
+     "energia",
+     "disjuntor",
+     "luminaria"
+    ],
+    [
+     "de cima",
+     "andar",
+     "vizinho"
+    ],
+    [
+     "forro",
+     "nao toque"
+    ]
+   ]
+  },
+  {
+   "descricao": "Cheguei em casa e a chave quebrou dentro da fechadura da porta da frente, estou do lado de fora.",
+   "categoria": "chaveiro",
+   "urgencias": [
+    "MEDIA",
+    "ALTA"
+   ],
+   "seguranca": [
+    [
+     "force",
+     "forcar"
+    ],
+    [
+     "cola",
+     "oleo"
+    ],
+    [
+     "pinca"
+    ],
+    [
+     "193",
+     "bombeiro",
+     "crianca"
+    ]
+   ]
+  },
+  {
+   "descricao": "Surgiu uma rachadura diagonal grande na parede da sala, saindo do canto da janela, e está aumentando.",
+   "categoria": "pedreiro",
+   "urgencias": [
+    "EMERGENCIA",
+    "ALTA"
+   ],
+   "seguranca": [
+    [
+     "engenheiro"
+    ],
+    [
+     "lapis",
+     "marque",
+     "marcar",
+     "foto",
+     "regua"
+    ],
+    [
+     "199",
+     "defesa civil"
+    ],
+    [
+     "emperr",
+     "estalo"
+    ]
+   ]
+  }
+ ],
+ "linhas": [
+  {
+   "n": 1,
+   "rag": true,
+   "modo": "llm",
+   "categoria": "eletricista",
+   "cat_ok": true,
+   "urgencia": "ALTA",
+   "urg_ok": true,
+   "cobertura": 1.0,
+   "fontes": 4,
+   "prestadores": 0,
+   "latencia": 8209.2,
+   "tin": 919,
+   "tout": 236,
+   "custo": 0.000866,
+   "orientacoes": [
+    "Desligue o disjuntor do chuveiro antes de abrir o aparelho.",
+    "Nunca mexa em fiação com as mãos ou os pés molhados e não use escada metálica.",
+    "Não troque o disjuntor por um de amperagem maior para ele parar de desarmar.",
+    "Se a fiação estiver escurecida, derretida ou com cheiro de queimado, não religue e chame um eletricista."
+   ]
+  },
+  {
+   "n": 1,
+   "rag": false,
+   "modo": "llm",
+   "categoria": "eletricista",
+   "cat_ok": true,
+   "urgencia": "MEDIA",
+   "urg_ok": true,
+   "cobertura": 0.75,
+   "fontes": 0,
+   "prestadores": 0,
+   "latencia": 5559.2,
+   "tin": 340,
+   "tout": 199,
+   "custo": 0.000599,
+   "orientacoes": [
+    "Desligue o disjuntor exclusivo do chuveiro no quadro de distribuição antes de mexer ou verificar qualquer conexão.",
+    "Evite tocar nos fios ou no aparelho com as mãos molhadas ou descalço para prevenir choques elétricos.",
+    "Não tente forçar o disjuntor a permanecer ligado caso ele volte a desarmar."
+   ]
+  },
+  {
+   "n": 2,
+   "rag": true,
+   "modo": "llm",
+   "categoria": "tecnico-gas",
+   "cat_ok": true,
+   "urgencia": "EMERGENCIA",
+   "urg_ok": true,
+   "cobertura": 1.0,
+   "fontes": 4,
+   "prestadores": 0,
+   "latencia": 6346.5,
+   "tin": 855,
+   "tout": 214,
+   "custo": 0.000791,
+   "orientacoes": [
+    "Acione o Corpo de Bombeiros (193) imediatamente e garanta a retirada de todas as pessoas e animais do local.",
+    "Não acenda fósforos, isqueiros ou velas e não fume.",
+    "Não acione interruptores de luz, campainha ou aparelhos elétricos para evitar faíscas.",
+    "Feche o registro do gás (botijão ou registro geral encanado) e abra portas e janelas para ventilar."
+   ]
+  },
+  {
+   "n": 2,
+   "rag": false,
+   "modo": "llm",
+   "categoria": "tecnico-gas",
+   "cat_ok": true,
+   "urgencia": "EMERGENCIA",
+   "urg_ok": true,
+   "cobertura": 0.8,
+   "fontes": 0,
+   "prestadores": 0,
+   "latencia": 5506.9,
+   "tin": 330,
+   "tout": 202,
+   "custo": 0.000604,
+   "orientacoes": [
+    "Ligue imediatamente para o Corpo de Bombeiros (193) se houver risco iminente ou mal-estar.",
+    "Feche o registro geral de gás imediatamente.",
+    "Não acenda luzes, fósforos, isqueiros e não utilize nenhum aparelho eletrônico para evitar faíscas.",
+    "Abra portas e janelas para ventilar o ambiente."
+   ]
+  },
+  {
+   "n": 3,
+   "rag": true,
+   "modo": "llm",
+   "categoria": "encanador",
+   "cat_ok": true,
+   "urgencia": "MEDIA",
+   "urg_ok": true,
+   "cobertura": 0.5,
+   "fontes": 4,
+   "prestadores": 0,
+   "latencia": 6303.5,
+   "tin": 771,
+   "tout": 154,
+   "custo": 0.000616,
+   "orientacoes": [
+    "Desligue a energia das luminárias próximas se a mancha estiver estufada ou pingando.",
+    "Não toque no forro do teto para evitar acidentes ou quedas de material."
+   ]
+  },
+  {
+   "n": 3,
+   "rag": false,
+   "modo": "llm",
+   "categoria": "encanador",
+   "cat_ok": true,
+   "urgencia": "MEDIA",
+   "urg_ok": true,
+   "cobertura": 0.25,
+   "fontes": 0,
+   "prestadores": 0,
+   "latencia": 5527.2,
+   "tin": 339,
+   "tout": 189,
+   "custo": 0.000574,
+   "orientacoes": [
+    "Evite usar o chuveiro ou o banheiro do andar superior, se houver, para cessar a alimentação do vazamento.",
+    "Coloque um balde e panos no chão para conter a água que está pingando e evitar escorregões.",
+    "Afaste móveis, tapetes e objetos eletrônicos ou de valor da área afetada."
+   ]
+  },
+  {
+   "n": 4,
+   "rag": true,
+   "modo": "llm",
+   "categoria": "chaveiro",
+   "cat_ok": true,
+   "urgencia": "ALTA",
+   "urg_ok": true,
+   "cobertura": 0.75,
+   "fontes": 4,
+   "prestadores": 0,
+   "latencia": 6238.8,
+   "tin": 756,
+   "tout": 202,
+   "custo": 0.000732,
+   "orientacoes": [
+    "Não force a fechadura nem tente girar o pedaço da chave com objetos metálicos para evitar empurrar o fragmento para dentro e danificar o cilindro.",
+    "Não coloque cola, óleo de cozinha ou palito no mecanismo.",
+    "Caso uma ponta do fragmento esteja visível, você pode tentar puxá-la com uma pinça fina, sem girar."
+   ]
+  },
+  {
+   "n": 4,
+   "rag": false,
+   "modo": "llm",
+   "categoria": "chaveiro",
+   "cat_ok": true,
+   "urgencia": "ALTA",
+   "urg_ok": true,
+   "cobertura": 0.25,
+   "fontes": 0,
+   "prestadores": 0,
+   "latencia": 5380.7,
+   "tin": 340,
+   "tout": 180,
+   "custo": 0.000552,
+   "orientacoes": [
+    "Mantenha-se em um local seguro e iluminado enquanto aguarda o atendimento.",
+    "Não tente forçar a abertura da porta com ferramentas inadequadas para evitar danificar ainda mais a fechadura ou a porta.",
+    "Tenha em mãos um documento de identificação que comprove sua residência no local."
+   ]
+  },
+  {
+   "n": 5,
+   "rag": true,
+   "modo": "llm",
+   "categoria": "pedreiro",
+   "cat_ok": true,
+   "urgencia": "EMERGENCIA",
+   "urg_ok": true,
+   "cobertura": 0.25,
+   "fontes": 4,
+   "prestadores": 0,
+   "latencia": 6901.9,
+   "tin": 866,
+   "tout": 168,
+   "custo": 0.00068,
+   "orientacoes": [
+    "Saia do imóvel imediatamente.",
+    "Ligue para a Defesa Civil (199) ou para os Bombeiros (193).",
+    "Não retorne ao interior do imóvel até que uma avaliação estrutural seja realizada."
+   ]
+  },
+  {
+   "n": 5,
+   "rag": false,
+   "modo": "llm",
+   "categoria": "pedreiro",
+   "cat_ok": true,
+   "urgencia": "ALTA",
+   "urg_ok": true,
+   "cobertura": 0.25,
+   "fontes": 0,
+   "prestadores": 0,
+   "latencia": 5554.3,
+   "tin": 337,
+   "tout": 186,
+   "custo": 0.000566,
+   "orientacoes": [
+    "Afafaste móveis e objetos próximos à parede afetada para evitar danos ou acidentes.",
+    "Evite permanecer no cômodo por longos períodos até a avaliação de um profissional.",
+    "Monitore o crescimento da rachadura com uma marcação a lápis se necessário, mas não tente consertá-la por conta própria."
+   ]
+  }
+ ],
+ "respostas": [
+  {
+   "descricao": "Meu chuveiro elétrico parou de esquentar e quando ligo no modo inverno o disjuntor desarma.",
+   "rag": true,
+   "resposta": {
+    "triagemId": "tri_d6056ea494",
+    "categoria": "eletricista",
+    "urgencia": "ALTA",
+    "resumo": "Chuveiro elétrico não esquenta e desarma o disjuntor ao ser ligado no modo inverno.",
+    "orientacoesSeguranca": [
+     "Desligue o disjuntor do chuveiro antes de abrir o aparelho.",
+     "Nunca mexa em fiação com as mãos ou os pés molhados e não use escada metálica.",
+     "Não troque o disjuntor por um de amperagem maior para ele parar de desarmar.",
+     "Se a fiação estiver escurecida, derretida ou com cheiro de queimado, não religue e chame um eletricista."
+    ],
+    "perguntasComplementares": [
+     "Qual é a potência do chuveiro (em Watts) e qual a amperagem do disjuntor atual?",
+     "A fiação ou o disjuntor apresentam cheiro de queimado ou sinais de aquecimento?"
+    ],
+    "prestadoresSugeridos": [],
+    "fontes": [
+     {
+      "documento": "seguranca-eletrica.md",
+      "secao": "Chuveiro elétrico que não esquenta ou desarma o disjuntor",
+      "distancia": 0.3408
+     },
+     {
+      "documento": "seguranca-eletrica.md",
+      "secao": "Antes de qualquer reparo elétrico",
+      "distancia": 0.372
+     },
+     {
+      "documento": "seguranca-eletrica.md",
+      "secao": "Choque elétrico",
+      "distancia": 0.4858
+     },
+     {
+      "documento": "seguranca-eletrica.md",
+      "secao": "Cheiro de queimado, faísca ou tomada quente",
+      "distancia": 0.4956
+     }
+    ],
+    "modo": "llm",
+    "rag": true,
+    "cache": false,
+    "avisos": [
+     "Não foi possível consultar prestadores agora; tente a busca em instantes."
+    ],
+    "metricas": {
+     "latenciaMs": 8209.2,
+     "modelo": "gemini-3.5-flash-lite",
+     "tokensEntrada": 919,
+     "tokensSaida": 236,
+     "custoEstimadoUsd": 0.000866
+    },
+    "_links": {
+     "buscarPrestadores": {
+      "href": "/v1/prestadores?categoria=eletricista&cidade=Lavras",
+      "method": "GET"
+     },
+     "criarSolicitacao": {
+      "href": "/v1/solicitacoes",
+      "method": "POST",
+      "title": "Abrir solicitação"
+     }
+    }
+   }
+  },
+  {
+   "descricao": "Meu chuveiro elétrico parou de esquentar e quando ligo no modo inverno o disjuntor desarma.",
+   "rag": false,
+   "resposta": {
+    "triagemId": "tri_9f7ecd85b1",
+    "categoria": "eletricista",
+    "urgencia": "MEDIA",
+    "resumo": "O chuveiro não esquenta e o disjuntor desarma ao ligar na potência máxima.",
+    "orientacoesSeguranca": [
+     "Desligue o disjuntor exclusivo do chuveiro no quadro de distribuição antes de mexer ou verificar qualquer conexão.",
+     "Evite tocar nos fios ou no aparelho com as mãos molhadas ou descalço para prevenir choques elétricos.",
+     "Não tente forçar o disjuntor a permanecer ligado caso ele volte a desarmar."
+    ],
+    "perguntasComplementares": [
+     "O disjuntor desarma imediatamente ou apenas após alguns segundos de uso?",
+     "A fiação próxima ao chuveiro apresenta cheiro de queimado ou sinais de aquecimento?"
+    ],
+    "prestadoresSugeridos": [],
+    "fontes": [],
+    "modo": "llm",
+    "rag": false,
+    "cache": false,
+    "avisos": [
+     "Não foi possível consultar prestadores agora; tente a busca em instantes."
+    ],
+    "metricas": {
+     "latenciaMs": 5559.2,
+     "modelo": "gemini-3.5-flash-lite",
+     "tokensEntrada": 340,
+     "tokensSaida": 199,
+     "custoEstimadoUsd": 0.000599
+    },
+    "_links": {
+     "buscarPrestadores": {
+      "href": "/v1/prestadores?categoria=eletricista&cidade=Lavras",
+      "method": "GET"
+     },
+     "criarSolicitacao": {
+      "href": "/v1/solicitacoes",
+      "method": "POST",
+      "title": "Abrir solicitação"
+     }
+    }
+   }
+  },
+  {
+   "descricao": "Estou sentindo um cheiro forte de gás na cozinha desde que acordei.",
+   "rag": true,
+   "resposta": {
+    "triagemId": "tri_a4e81c93ed",
+    "categoria": "tecnico-gas",
+    "urgencia": "EMERGENCIA",
+    "resumo": "Identificado cheiro forte de gás na cozinha com suspeita de vazamento ativo.",
+    "orientacoesSeguranca": [
+     "Acione o Corpo de Bombeiros (193) imediatamente e garanta a retirada de todas as pessoas e animais do local.",
+     "Não acenda fósforos, isqueiros ou velas e não fume.",
+     "Não acione interruptores de luz, campainha ou aparelhos elétricos para evitar faíscas.",
+     "Feche o registro do gás (botijão ou registro geral encanado) e abra portas e janelas para ventilar."
+    ],
+    "perguntasComplementares": [
+     "O sistema utiliza gás encanado ou botijão GLP?",
+     "Você consegue identificar de qual equipamento o cheiro está vindo?"
+    ],
+    "prestadoresSugeridos": [],
+    "fontes": [
+     {
+      "documento": "categorias.md",
+      "secao": "tecnico-gas",
+      "distancia": 0.424
+     },
+     {
+      "documento": "seguranca-gas.md",
+      "secao": "Sentiu cheiro de gás",
+      "distancia": 0.4445
+     },
+     {
+      "documento": "seguranca-gas.md",
+      "secao": "Aquecedor a gás",
+      "distancia": 0.4767
+     },
+     {
+      "documento": "urgencia.md",
+      "secao": "EMERGENCIA",
+      "distancia": 0.498
+     }
+    ],
+    "modo": "llm",
+    "rag": true,
+    "cache": false,
+    "avisos": [
+     "EMERGÊNCIA: priorize a segurança e acione o serviço público antes do prestador.",
+     "Não foi possível consultar prestadores agora; tente a busca em instantes."
+    ],
+    "metricas": {
+     "latenciaMs": 6346.5,
+     "modelo": "gemini-3.5-flash-lite",
+     "tokensEntrada": 855,
+     "tokensSaida": 214,
+     "custoEstimadoUsd": 0.000791
+    },
+    "_links": {
+     "buscarPrestadores": {
+      "href": "/v1/prestadores?categoria=tecnico-gas&cidade=Lavras",
+      "method": "GET"
+     },
+     "criarSolicitacao": {
+      "href": "/v1/solicitacoes",
+      "method": "POST",
+      "title": "Abrir solicitação"
+     }
+    }
+   }
+  },
+  {
+   "descricao": "Estou sentindo um cheiro forte de gás na cozinha desde que acordei.",
+   "rag": false,
+   "resposta": {
+    "triagemId": "tri_2ea9da03ea",
+    "categoria": "tecnico-gas",
+    "urgencia": "EMERGENCIA",
+    "resumo": "Cheiro forte de gás na cozinha indicando possível vazamento.",
+    "orientacoesSeguranca": [
+     "Ligue imediatamente para o Corpo de Bombeiros (193) se houver risco iminente ou mal-estar.",
+     "Feche o registro geral de gás imediatamente.",
+     "Não acenda luzes, fósforos, isqueiros e não utilize nenhum aparelho eletrônico para evitar faíscas.",
+     "Abra portas e janelas para ventilar o ambiente."
+    ],
+    "perguntasComplementares": [
+     "O cheiro vem do fogão ou do botijão/cilindro/tubulação de parede?",
+     "Alguém na residência apresenta sintomas como tontura ou enjoo?"
+    ],
+    "prestadoresSugeridos": [],
+    "fontes": [],
+    "modo": "llm",
+    "rag": false,
+    "cache": false,
+    "avisos": [
+     "EMERGÊNCIA: priorize a segurança e acione o serviço público antes do prestador.",
+     "Não foi possível consultar prestadores agora; tente a busca em instantes."
+    ],
+    "metricas": {
+     "latenciaMs": 5506.9,
+     "modelo": "gemini-3.5-flash-lite",
+     "tokensEntrada": 330,
+     "tokensSaida": 202,
+     "custoEstimadoUsd": 0.000604
+    },
+    "_links": {
+     "buscarPrestadores": {
+      "href": "/v1/prestadores?categoria=tecnico-gas&cidade=Lavras",
+      "method": "GET"
+     },
+     "criarSolicitacao": {
+      "href": "/v1/solicitacoes",
+      "method": "POST",
+      "title": "Abrir solicitação"
+     }
+    }
+   }
+  },
+  {
+   "descricao": "Apareceu uma mancha de umidade no teto do banheiro que aumenta depois do banho e começou a pingar.",
+   "rag": true,
+   "resposta": {
+    "triagemId": "tri_ef9136422d",
+    "categoria": "encanador",
+    "urgencia": "MEDIA",
+    "resumo": "Mancha de umidade no teto do banheiro que aumenta após o banho e apresenta gotejamento.",
+    "orientacoesSeguranca": [
+     "Desligue a energia das luminárias próximas se a mancha estiver estufada ou pingando.",
+     "Não toque no forro do teto para evitar acidentes ou quedas de material."
+    ],
+    "perguntasComplementares": [
+     "A mancha fica localizada logo abaixo do chuveiro ou de algum registro?",
+     "Existe algum apartamento ou cômodo acima deste banheiro?"
+    ],
+    "prestadoresSugeridos": [],
+    "fontes": [
+     {
+      "documento": "hidraulica.md",
+      "secao": "Mancha de umidade em teto ou parede",
+      "distancia": 0.3427
+     },
+     {
+      "documento": "urgencia.md",
+      "secao": "MEDIA",
+      "distancia": 0.4687
+     },
+     {
+      "documento": "hidraulica.md",
+      "secao": "Teste do hidrômetro (vazamento oculto)",
+      "distancia": 0.5247
+     },
+     {
+      "documento": "categorias.md",
+      "secao": "pedreiro",
+      "distancia": 0.539
+     }
+    ],
+    "modo": "llm",
+    "rag": true,
+    "cache": false,
+    "avisos": [
+     "Não foi possível consultar prestadores agora; tente a busca em instantes."
+    ],
+    "metricas": {
+     "latenciaMs": 6303.5,
+     "modelo": "gemini-3.5-flash-lite",
+     "tokensEntrada": 771,
+     "tokensSaida": 154,
+     "custoEstimadoUsd": 0.000616
+    },
+    "_links": {
+     "buscarPrestadores": {
+      "href": "/v1/prestadores?categoria=encanador&cidade=Lavras",
+      "method": "GET"
+     },
+     "criarSolicitacao": {
+      "href": "/v1/solicitacoes",
+      "method": "POST",
+      "title": "Abrir solicitação"
+     }
+    }
+   }
+  },
+  {
+   "descricao": "Apareceu uma mancha de umidade no teto do banheiro que aumenta depois do banho e começou a pingar.",
+   "rag": false,
+   "resposta": {
+    "triagemId": "tri_7608ebedf9",
+    "categoria": "encanador",
+    "urgencia": "MEDIA",
+    "resumo": "Infiltração no teto do banheiro com vazamento de água após o uso do chuveiro.",
+    "orientacoesSeguranca": [
+     "Evite usar o chuveiro ou o banheiro do andar superior, se houver, para cessar a alimentação do vazamento.",
+     "Coloque um balde e panos no chão para conter a água que está pingando e evitar escorregões.",
+     "Afaste móveis, tapetes e objetos eletrônicos ou de valor da área afetada."
+    ],
+    "perguntasComplementares": [
+     "Há algum banheiro ou registro localizado logo acima dessa mancha?",
+     "A mancha fica próxima à área do box ou do vaso sanitário?"
+    ],
+    "prestadoresSugeridos": [],
+    "fontes": [],
+    "modo": "llm",
+    "rag": false,
+    "cache": false,
+    "avisos": [
+     "Não foi possível consultar prestadores agora; tente a busca em instantes."
+    ],
+    "metricas": {
+     "latenciaMs": 5527.2,
+     "modelo": "gemini-3.5-flash-lite",
+     "tokensEntrada": 339,
+     "tokensSaida": 189,
+     "custoEstimadoUsd": 0.000574
+    },
+    "_links": {
+     "buscarPrestadores": {
+      "href": "/v1/prestadores?categoria=encanador&cidade=Lavras",
+      "method": "GET"
+     },
+     "criarSolicitacao": {
+      "href": "/v1/solicitacoes",
+      "method": "POST",
+      "title": "Abrir solicitação"
+     }
+    }
+   }
+  },
+  {
+   "descricao": "Cheguei em casa e a chave quebrou dentro da fechadura da porta da frente, estou do lado de fora.",
+   "rag": true,
+   "resposta": {
+    "triagemId": "tri_b0a9eff837",
+    "categoria": "chaveiro",
+    "urgencia": "ALTA",
+    "resumo": "Chave quebrada dentro da fechadura da porta da frente, deixando o morador do lado de fora.",
+    "orientacoesSeguranca": [
+     "Não force a fechadura nem tente girar o pedaço da chave com objetos metálicos para evitar empurrar o fragmento para dentro e danificar o cilindro.",
+     "Não coloque cola, óleo de cozinha ou palito no mecanismo.",
+     "Caso uma ponta do fragmento esteja visível, você pode tentar puxá-la com uma pinça fina, sem girar."
+    ],
+    "perguntasComplementares": [
+     "Há alguma ponta do fragmento da chave visível para fora do cilindro?",
+     "Existe criança, idoso ou pessoa vulnerável trancada do outro lado da porta?"
+    ],
+    "prestadoresSugeridos": [],
+    "fontes": [
+     {
+      "documento": "estrutura-e-acesso.md",
+      "secao": "Chave quebrada ou porta travada",
+      "distancia": 0.3449
+     },
+     {
+      "documento": "categorias.md",
+      "secao": "chaveiro",
+      "distancia": 0.415
+     },
+     {
+      "documento": "hidraulica.md",
+      "secao": "Teste do hidrômetro (vazamento oculto)",
+      "distancia": 0.4476
+     },
+     {
+      "documento": "categorias.md",
+      "secao": "pedreiro",
+      "distancia": 0.4652
+     }
+    ],
+    "modo": "llm",
+    "rag": true,
+    "cache": false,
+    "avisos": [
+     "Não foi possível consultar prestadores agora; tente a busca em instantes."
+    ],
+    "metricas": {
+     "latenciaMs": 6238.8,
+     "modelo": "gemini-3.5-flash-lite",
+     "tokensEntrada": 756,
+     "tokensSaida": 202,
+     "custoEstimadoUsd": 0.000732
+    },
+    "_links": {
+     "buscarPrestadores": {
+      "href": "/v1/prestadores?categoria=chaveiro&cidade=Lavras",
+      "method": "GET"
+     },
+     "criarSolicitacao": {
+      "href": "/v1/solicitacoes",
+      "method": "POST",
+      "title": "Abrir solicitação"
+     }
+    }
+   }
+  },
+  {
+   "descricao": "Cheguei em casa e a chave quebrou dentro da fechadura da porta da frente, estou do lado de fora.",
+   "rag": false,
+   "resposta": {
+    "triagemId": "tri_1d14d93e2a",
+    "categoria": "chaveiro",
+    "urgencia": "ALTA",
+    "resumo": "Chave quebrada dentro da fechadura da porta da frente, deixando o morador do lado de fora.",
+    "orientacoesSeguranca": [
+     "Mantenha-se em um local seguro e iluminado enquanto aguarda o atendimento.",
+     "Não tente forçar a abertura da porta com ferramentas inadequadas para evitar danificar ainda mais a fechadura ou a porta.",
+     "Tenha em mãos um documento de identificação que comprove sua residência no local."
+    ],
+    "perguntasComplementares": [
+     "A porta possui tranca adicional ou apenas a fechadura principal?",
+     "A fechadura é do tipo comum ou multiponto/tetra?"
+    ],
+    "prestadoresSugeridos": [],
+    "fontes": [],
+    "modo": "llm",
+    "rag": false,
+    "cache": false,
+    "avisos": [
+     "Não foi possível consultar prestadores agora; tente a busca em instantes."
+    ],
+    "metricas": {
+     "latenciaMs": 5380.7,
+     "modelo": "gemini-3.5-flash-lite",
+     "tokensEntrada": 340,
+     "tokensSaida": 180,
+     "custoEstimadoUsd": 0.000552
+    },
+    "_links": {
+     "buscarPrestadores": {
+      "href": "/v1/prestadores?categoria=chaveiro&cidade=Lavras",
+      "method": "GET"
+     },
+     "criarSolicitacao": {
+      "href": "/v1/solicitacoes",
+      "method": "POST",
+      "title": "Abrir solicitação"
+     }
+    }
+   }
+  },
+  {
+   "descricao": "Surgiu uma rachadura diagonal grande na parede da sala, saindo do canto da janela, e está aumentando.",
+   "rag": true,
+   "resposta": {
+    "triagemId": "tri_5657076338",
+    "categoria": "pedreiro",
+    "urgencia": "EMERGENCIA",
+    "resumo": "Rachadura diagonal grande e crescente saindo do canto da janela na parede da sala.",
+    "orientacoesSeguranca": [
+     "Saia do imóvel imediatamente.",
+     "Ligue para a Defesa Civil (199) ou para os Bombeiros (193).",
+     "Não retorne ao interior do imóvel até que uma avaliação estrutural seja realizada."
+    ],
+    "perguntasComplementares": [
+     "Você ouviu algum estalo frequente ou notou portas e janelas emperrando?",
+     "Existem pedaços de reboco ou concreto caindo no local?"
+    ],
+    "prestadoresSugeridos": [],
+    "fontes": [
+     {
+      "documento": "estrutura-e-acesso.md",
+      "secao": "Quando a rachadura é grave",
+      "distancia": 0.4268
+     },
+     {
+      "documento": "categorias.md",
+      "secao": "pedreiro",
+      "distancia": 0.4588
+     },
+     {
+      "documento": "estrutura-e-acesso.md",
+      "secao": "Chave quebrada ou porta travada",
+      "distancia": 0.4781
+     },
+     {
+      "documento": "estrutura-e-acesso.md",
+      "secao": "Tipos de fissura",
+      "distancia": 0.4921
+     }
+    ],
+    "modo": "llm",
+    "rag": true,
+    "cache": false,
+    "avisos": [
+     "EMERGÊNCIA: priorize a segurança e acione o serviço público antes do prestador.",
+     "Não foi possível consultar prestadores agora; tente a busca em instantes."
+    ],
+    "metricas": {
+     "latenciaMs": 6901.9,
+     "modelo": "gemini-3.5-flash-lite",
+     "tokensEntrada": 866,
+     "tokensSaida": 168,
+     "custoEstimadoUsd": 0.00068
+    },
+    "_links": {
+     "buscarPrestadores": {
+      "href": "/v1/prestadores?categoria=pedreiro&cidade=Lavras",
+      "method": "GET"
+     },
+     "criarSolicitacao": {
+      "href": "/v1/solicitacoes",
+      "method": "POST",
+      "title": "Abrir solicitação"
+     }
+    }
+   }
+  },
+  {
+   "descricao": "Surgiu uma rachadura diagonal grande na parede da sala, saindo do canto da janela, e está aumentando.",
+   "rag": false,
+   "resposta": {
+    "triagemId": "tri_f23a4b127c",
+    "categoria": "pedreiro",
+    "urgencia": "ALTA",
+    "resumo": "Rachadura diagonal em expansão saindo da janela da sala.",
+    "orientacoesSeguranca": [
+     "Afafaste móveis e objetos próximos à parede afetada para evitar danos ou acidentes.",
+     "Evite permanecer no cômodo por longos períodos até a avaliação de um profissional.",
+     "Monitore o crescimento da rachadura com uma marcação a lápis se necessário, mas não tente consertá-la por conta própria."
+    ],
+    "perguntasComplementares": [
+     "A rachadura atravessa a parede de um lado ao outro ou atinge a parte externa da casa?",
+     "Houve alguma obra recente ou infiltração de água próxima a essa janela?"
+    ],
+    "prestadoresSugeridos": [],
+    "fontes": [],
+    "modo": "llm",
+    "rag": false,
+    "cache": false,
+    "avisos": [
+     "Não foi possível consultar prestadores agora; tente a busca em instantes."
+    ],
+    "metricas": {
+     "latenciaMs": 5554.3,
+     "modelo": "gemini-3.5-flash-lite",
+     "tokensEntrada": 337,
+     "tokensSaida": 186,
+     "custoEstimadoUsd": 0.000566
+    },
+    "_links": {
+     "buscarPrestadores": {
+      "href": "/v1/prestadores?categoria=pedreiro&cidade=Lavras",
+      "method": "GET"
+     },
+     "criarSolicitacao": {
+      "href": "/v1/solicitacoes",
+      "method": "POST",
+      "title": "Abrir solicitação"
+     }
+    }
+   }
+  }
+ ]
+}

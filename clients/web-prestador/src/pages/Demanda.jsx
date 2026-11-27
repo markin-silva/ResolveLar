@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
-import { Aviso, Carregando, Selo } from "../components.jsx";
+import { Aviso, Carregando, Dica, Selo } from "../components.jsx";
 import { brl, dataHora, nomeCategoria } from "../format.js";
 
 // Uma demanda pode estar aberta (visão pública: sem endereço nem contato) ou já ser deste profissional
@@ -107,6 +107,7 @@ export default function Demanda() {
       ) : (
         <form className="cartao pilha" onSubmit={enviar}>
           <h2>Enviar orçamento</h2>
+          <Dica>Seja específico sobre o que está incluído. Clareza passa confiança e ajuda o cliente a escolher você.</Dica>
           <div className="linha">
             <label>Valor total (R$)
               <input inputMode="decimal" required placeholder="180,00" value={form.valor}
