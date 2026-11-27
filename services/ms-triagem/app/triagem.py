@@ -75,6 +75,21 @@ async def _invocar_llm(entrada: dict) -> tuple[Classificacao, dict]:
     raise RuntimeError("inalcançável")
 
 
+async def _com_teto(coro, segundos: float):
+    """Teto rígido: estourou o tempo, segue sem esperar o cancelamento terminar.
+
+    `asyncio.wait_for` aguarda a tarefa cancelada encerrar, e o SDK do LLM pode levar segundos para
+    soltar a requisição HTTP em andamento; isso empurrava a resposta além do timeout do BFF (503).
+    """
+    tarefa = asyncio.ensure_future(coro)
+    feitas, _ = await asyncio.wait({tarefa}, timeout=segundos)
+    if not feitas:
+        tarefa.cancel()
+        tarefa.add_done_callback(lambda t: t.cancelled() or t.exception())  # evita "exception never retrieved"
+        raise asyncio.TimeoutError(f"orçamento total do LLM ({segundos}s) esgotado")
+    return tarefa.result()
+
+
 async def classificar(x: dict) -> dict:
     """LLM com resiliência; qualquer falha cai no fallback determinístico (que também usa o RAG)."""
     avisos: list[str] = []
@@ -89,7 +104,7 @@ async def classificar(x: dict) -> dict:
         avisos.append("Sem tempo para consultar o LLM nesta requisição: triagem por regras.")
     else:
         try:
-            resultado, uso = await asyncio.wait_for(_invocar_llm(entrada), timeout=orcamento)
+            resultado, uso = await _com_teto(_invocar_llm(entrada), orcamento)
             breaker.sucesso()
             return {"resultado": resultado, "modo": "llm", "uso": uso, "avisos": avisos}
         except Exception as exc:

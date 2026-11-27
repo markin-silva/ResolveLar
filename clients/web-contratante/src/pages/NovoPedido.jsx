@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
-import { Aviso } from "../components.jsx";
+import { Aviso, Beneficios, Icone } from "../components.jsx";
 import { CATEGORIAS, nomeCategoria } from "../format.js";
 
 // Criação do pedido em duas etapas: descrever (com triagem opcional) e confirmar o local.
@@ -41,10 +41,16 @@ export default function NovoPedido() {
   }
 
   return (
-    <section className="estreito">
-      <h1>Novo pedido</h1>
-      <p className="muted">Conte o que aconteceu. Os profissionais da sua região vão enviar orçamentos.</p>
+    <section>
+      <div className="cabecalho-pagina">
+        <span className="cabecalho-icone"><Icone nome="lapis" tamanho={24} /></span>
+        <div>
+          <h1>Novo pedido</h1>
+          <p className="muted">Conte o que aconteceu. Os profissionais da sua região vão enviar orçamentos.</p>
+        </div>
+      </div>
 
+      <div className="duas-colunas">
       <form className="cartao pilha" onSubmit={criar}>
         <h2>1. O que está acontecendo?</h2>
         <label>Descrição do problema
@@ -108,6 +114,25 @@ export default function NovoPedido() {
           {ocupado === "criar" ? "Criando…" : "Criar pedido"}
         </button>
       </form>
+
+      <aside className="coluna-lateral">
+        <div className="cartao">
+          <p className="rotulo">Como funciona</p>
+          <ol className="linha-do-tempo">
+            <li><strong>Descreva o problema</strong><small>Quanto mais detalhes, mais certeiro o orçamento.</small></li>
+            <li><strong>Receba orçamentos</strong><small>Profissionais da sua região enviam propostas.</small></li>
+            <li><strong>Escolha e agende</strong><small>Compare preço, prazo e avaliações. Você decide.</small></li>
+          </ol>
+        </div>
+        <div className="cartao cartao-suave">
+          <Beneficios itens={[
+            ["faisca", "Assistente inteligente", "Sugere a categoria e dá orientações de segurança."],
+            ["cadeado", "Privacidade", "Rua e número só para quem você contratar."],
+            ["escudo", "Sem compromisso", "Pedir orçamento não obriga a contratar."],
+          ]} />
+        </div>
+      </aside>
+      </div>
     </section>
   );
 }

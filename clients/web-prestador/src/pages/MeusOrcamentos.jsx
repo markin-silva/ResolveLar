@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
-import { Aviso, Carregando, Selo, Vazio } from "../components.jsx";
+import { Aviso, Carregando, Dica, Icone, Selo, Vazio } from "../components.jsx";
 import { brl } from "../format.js";
 
 export default function MeusOrcamentos() {
@@ -20,8 +20,14 @@ export default function MeusOrcamentos() {
 
   return (
     <section>
-      <h1>Meus orçamentos</h1>
-      <p className="muted">Propostas que você enviou e o que o cliente decidiu.</p>
+      <div className="cabecalho-pagina">
+        <span className="cabecalho-icone"><Icone nome="lapis" tamanho={24} /></span>
+        <div>
+          <h1>Meus orçamentos</h1>
+          <p className="muted">Propostas que você enviou e o que o cliente decidiu.</p>
+        </div>
+      </div>
+      <Dica>Orçamentos claros vendem mais: diga exatamente o que está incluído e em quanto tempo você resolve.</Dica>
       <Aviso tipo="erro">{erro}</Aviso>
       {lista === null && <Carregando />}
       {lista?.length === 0 && !erro && <Vazio titulo="Você ainda não enviou orçamentos">Abra uma solicitação em “Novas solicitações”.</Vazio>}

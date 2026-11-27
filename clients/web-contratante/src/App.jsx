@@ -1,5 +1,6 @@
 import { Navigate, NavLink, Outlet, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth.jsx";
+import { Rodape } from "./components.jsx";
 import Entrar from "./pages/Entrar.jsx";
 import MeusPedidos from "./pages/MeusPedidos.jsx";
 import NovoPedido from "./pages/NovoPedido.jsx";
@@ -18,7 +19,7 @@ function Layout() {
   return (
     <div className="app">
       <header className="topo">
-        <div className="marca"><span className="marca-icone">R</span>resolvelar</div>
+        <div className="marca"><img className="marca-icone" src="/icone.png" alt="" /><span className="marca-nome">Resolve<b>Lar</b></span></div>
         <nav>
           <NavLink to="/" end>Meus pedidos</NavLink>
           <NavLink to="/novo">Novo pedido</NavLink>
@@ -30,6 +31,11 @@ function Layout() {
         </div>
       </header>
       <main><Outlet /></main>
+      <Rodape itens={[
+        ["escudo", "Pagamento protegido"],
+        ["estrela", "Profissionais avaliados por moradores"],
+        ["cadeado", "Endereço revelado só após a confirmação"],
+      ]} />
     </div>
   );
 }

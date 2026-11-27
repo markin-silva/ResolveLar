@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { api, gwPath } from "../api.js";
 import { useAuth } from "../auth.jsx";
-import { Aviso, Carregando, Estrelas, Passos, Selo, Vazio } from "../components.jsx";
+import { Aviso, Carregando, Dica, Estrelas, Passos, Selo, Vazio } from "../components.jsx";
 import { brl, nomeCategoria } from "../format.js";
 
 const POLL_MS = 2000;
@@ -140,7 +140,7 @@ export default function Pedido() {
       <div className="cabecalho">
         <div>
           <h1>{pedido.titulo || "Pedido"}</h1>
-          <p className="muted">{id}</p>
+          <p className="muted">{nomeCategoria(pedido.categoria)}</p>
         </div>
         <Selo status={status} />
       </div>
@@ -195,6 +195,10 @@ export default function Pedido() {
               </label>
             )}
           </div>
+
+          {orcamentos.length > 1 && podeEscolher && (
+            <Dica>O menor preço nem sempre é a melhor escolha: compare também o prazo e a avaliação de cada profissional.</Dica>
+          )}
 
           {orcamentos.length === 0 && status !== "EM_CONFIRMACAO" && (
             <Vazio titulo="Ainda não há orçamentos">

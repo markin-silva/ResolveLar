@@ -34,8 +34,20 @@ export default function Entrar() {
 
   return (
     <div className="entrada">
+      <div className="entrada-grade">
+      <aside className="entrada-vitrine">
+        <h2>Sua casa em <em>boas mãos</em>.</h2>
+        <p>Descreva o problema, compare orçamentos e agende com profissionais de confiança da sua região.</p>
+        <ul>
+          <li>Orçamentos de vários profissionais</li>
+          <li>Pagamento seguro pela plataforma</li>
+          <li>Avaliações reais de outros moradores</li>
+        </ul>
+        <img className="entrada-ilustracao" src="/boas-vindas.png" alt="" />
+      </aside>
       <form className="cartao entrada-cartao" onSubmit={enviar}>
-        <p className="sobretitulo">ResolveLar · Contratante</p>
+        <img className="entrada-logo" src="/logo.png" alt="ResolveLar" />
+        <p className="sobretitulo">Área do contratante</p>
         <h1>Entrar</h1>
         <p className="muted">Escolha o usuário de demonstração e informe a senha de teste.</p>
 
@@ -63,6 +75,7 @@ export default function Entrar() {
         <Aviso tipo="erro">{erro}</Aviso>
         <Aviso tipo="info">{aviso}</Aviso>
       </form>
+      </div>
     </div>
   );
 }
